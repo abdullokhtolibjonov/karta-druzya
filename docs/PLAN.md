@@ -36,10 +36,11 @@ Work phase by phase. At the end of each phase run `npm test` and tick the boxes.
 - [x] Server: `voice:ice` / `voice:mic` / `voice:signal`, vid per voice socket, Cloudflare TURN provider
 - [x] Client: WebRTC mesh, mic toggle (lobby + game), local mute, speaking ring, autoplay unlock
 - [x] Tests (relay, mic state, reconnect vid, ICE provider) and a two-browser check
-- [ ] Owner adds Cloudflare TURN keys in Render (docs/DEPLOY.md)
+- [x] Owner adds Cloudflare TURN keys in Render (docs/DEPLOY.md), verified live 2026-10-19
 - [ ] Real test on phones over mobile data
 
 ## Backlog / ideas
 - Sound effects (play, draw, your turn) with a mute toggle
 - Persist rooms across restarts (currently in memory)
 - Drag-to-play on touch devices
+- Optional push-to-talk mode and a "use headphones" hint (echo came up only when testing two devices side by side; deferred by the owner)
