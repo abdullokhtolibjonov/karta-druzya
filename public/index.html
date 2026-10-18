@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="uz" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#0f1514">
+  <meta name="description" content="108 — do'stlar bilan onlayn karta o'yini">
+  <title>108 — Karta o'yini</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='10' y='4' width='44' height='56' rx='7' fill='%23fff' stroke='%239e1830' stroke-width='3'/%3E%3Ctext x='32' y='41' text-anchor='middle' font-family='Georgia' font-weight='700' font-size='20' fill='%239e1830'%3E108%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <script>
+    try {
+      var th = localStorage.getItem('k108:theme');
+      if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th;
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <div id="sprite"></div>
+
+  <header class="topbar">
+    <button class="brand" id="brand" type="button" aria-label="108">
+      <span class="brand-mark">108</span>
+    </button>
+    <div class="topbar-info" id="topbar-info"></div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="btn-lang" type="button" data-i18n-title="language"><span id="lang-label">UZ</span></button>
+      <button class="icon-btn" id="btn-theme" type="button" data-i18n-title="theme"></button>
+      <button class="icon-btn hidden" id="btn-menu" type="button" data-i18n-title="menu"></button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Home -->
+    <section class="screen" id="screen-home">
+      <div class="home-card">
+        <div class="hero-fan" id="hero-fan"></div>
+        <h1 class="logo">108</h1>
+        <p class="tagline" data-i18n="tagline"></p>
+        <form id="form-name" class="stack" autocomplete="off">
+          <label class="field">
+            <span data-i18n="nickname"></span>
+            <input id="input-name" maxlength="16" required data-i18n-ph="nickname_ph" enterkeyhint="go">
+          </label>
+          <button class="btn btn-primary btn-lg" id="btn-create" type="submit" data-i18n="create_room"></button>
+        </form>
+        <div class="divider"><span data-i18n="or_join"></span></div>
+        <form id="form-join" class="join-row" autocomplete="off">
+          <input id="input-code" class="code-input" maxlength="4" data-i18n-ph="code_ph" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+          <button class="btn btn-secondary" type="submit" data-i18n="join"></button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Lobby -->
+    <section class="screen hidden" id="screen-lobby">
+      <div class="lobby">
+        <div class="lobby-code">
+          <div class="muted small" data-i18n="room"></div>
+          <div class="code-big" id="lobby-code">----</div>
+          <button class="btn btn-secondary" id="btn-share" type="button"></button>
+        </div>
+        <div class="panel">
+          <h2 class="panel-title"><span data-i18n="players"></span> <span class="muted" id="lobby-count"></span></h2>
+          <ul class="player-list" id="lobby-players"></ul>
+          <div id="lobby-spectators"></div>
+        </div>
+        <div class="panel" id="lobby-host">
+          <div class="setting-row">
+            <span data-i18n="turn_timer"></span>
+            <div class="segmented" id="timer-options"></div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-lg" id="btn-start" type="button" data-i18n="start"></button>
+        <p class="muted center" id="lobby-wait"></p>
+        <details class="panel rules">
+          <summary data-i18n="rules"></summary>
+          <ul id="rules-list"></ul>
+        </details>
+      </div>
+    </section>
+
+    <!-- Game -->
+    <section class="screen hidden" id="screen-game">
+      <div class="game">
+        <div class="opponents" id="opponents"></div>
+        <div class="felt" id="felt">
+          <div class="pile-row">
+            <button class="deck" id="deck" type="button" aria-label="deck">
+              <div class="deck-stack" id="deck-stack"></div>
+              <span class="deck-count" id="deck-count"></span>
+            </button>
+            <div class="discard" id="discard"></div>
+            <div class="badges">
+              <div class="suit-badge hidden" id="suit-badge"></div>
+              <div class="penalty-badge hidden" id="penalty-badge"></div>
+            </div>
+          </div>
+          <div class="status" id="status"></div>
+        </div>
+        <div class="me-area" id="me-area">
+          <div class="me-bar" id="me-bar"></div>
+          <div class="hand" id="hand"></div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" id="btn-draw" type="button"></button>
+          <button class="btn btn-secondary" id="btn-pass" type="button" data-i18n="pass"></button>
+          <div class="spacer"></div>
+          <button class="icon-btn round" id="btn-emoji" type="button" aria-label="emoji"></button>
+          <button class="icon-btn round" id="btn-chat" type="button" data-i18n-title="chat"><span class="badge hidden" id="chat-unread"></span></button>
+        </div>
+        <div class="emoji-bar hidden" id="emoji-bar"></div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="chat-panel" id="chat-panel" aria-hidden="true">
+    <div class="chat-head">
+      <strong data-i18n="chat"></strong>
+      <button class="icon-btn" id="chat-close" type="button" aria-label="close"></button>
+    </div>
+    <div class="chat-list" id="chat-list"></div>
+    <form class="chat-form" id="chat-form" autocomplete="off">
+      <input id="chat-input" maxlength="200" data-i18n-ph="chat_ph" enterkeyhint="send">
+      <button class="btn btn-primary" type="submit" id="chat-send" aria-label="send"></button>
+    </form>
+  </aside>
+
+  <div id="fx" class="fx"></div>
+  <div id="modal-root"></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <div id="conn" class="conn hidden" data-i18n="reconnecting"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
