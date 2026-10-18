@@ -13,6 +13,22 @@ The game is one Node process (Express + Socket.IO). All rooms live in memory, so
 3. After the build, the game is live at `https://karta-druzya-XXXX.onrender.com`.
    Share that link with friends.
 
+## Voice chat: Cloudflare TURN (free)
+
+Phones on mobile data often can't connect to each other directly. TURN relays the audio.
+Without it, voice still works on most Wi-Fi networks but may fail on 4G/5G.
+
+1. Sign in at https://dash.cloudflare.com (a free account is enough).
+2. Open **Realtime → TURN Server** (older dashboards: **Calls → TURN**), then click **Create**.
+   Give it a name such as `karta-druzya`.
+3. Copy the **Turn Token ID** and the **API Token**. The token is shown only once.
+4. In Render: open the `karta-druzya` service, go to **Environment**, and add
+   `TURN_KEY_ID` (the token id) and `TURN_KEY_API_TOKEN` (the API token). Save; Render redeploys.
+5. Check: the server log no longer says `Voice: no TURN_KEY_ID`.
+
+The free tier includes 1,000 GB of TURN traffic per month. One voice stream is about
+40 kbit/s (~18 MB per hour), so friends' games use only a tiny fraction.
+
 ## Updates
 
 Every push to `main` redeploys automatically. Don't push while friends are mid-game,

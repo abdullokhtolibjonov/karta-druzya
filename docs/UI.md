@@ -47,6 +47,9 @@ The card faces stay white in both themes, like real cards.
   back to clipboard, and shows a toast.
 - Player list: avatar circle (initial and a colour hashed from the name), name,
   👑 for the host, "(siz)" for me, and a dim style for disconnected players.
+- **Voice chat** panel (everyone): title, hint and a mic button "Mikrofonni yoqish" /
+  "Mikrofonni o'chirish" (green when on). Each other connected member's row has a 🔊/🔇
+  button to mute them locally.
 - Host only: timer setting (Off / 15 / 30 / 60), **Hammaga ko'rinsin** switch (on by default; off
   hides the room from the open rooms list), **Boshlash / Start** (disabled when < 2 players),
   and a kick ✕ on each player.
@@ -64,7 +67,7 @@ Layout (portrait phone):
 │   status line ("Sizning navbat")│
 │                                │
 │  my hand (overlapping fan)     │
-│ [Ko'tarish] [O'tkazish] 😀 💬  │
+│ [Ko'tarish] [O'tkazish] 🎤 😀 💬 │
 └───────────────────────────────┘
 ```
 - Desktop (≥ 900px): opponents sit along an arc on the felt, the hand is larger and the chat
@@ -113,6 +116,22 @@ Layout (portrait phone):
 - Draw: a back flies from the deck to my hand or to the opponent's avatar.
 - Penalty/skip: a short shake or badge pop on the target avatar.
 - Respect `prefers-reduced-motion` (disable flights, keep fades).
+
+## Voice chat
+
+- 🎤 button (actions row in the game, a labelled button in the lobby). It starts **off**. Tapping
+  asks for mic permission the first time. When on, it turns green (`--voice`).
+- Everyone hears everyone right away. No separate "join voice" step.
+- Avatar badges: a small green mic dot (bottom left) when that person's mic is on, or a red 🔇
+  dot when I muted them. The red dot wins.
+- Speaking: a green outline ring (`.avatar.speaking`) on every avatar of the person talking,
+  including me.
+- In the game, tapping an opponent's seat mutes or unmutes them (with a toast). Spectators
+  sit at the end of the opponents row as small "👁 tomoshabin" seats, so their bubbles and
+  rings show too.
+- If the browser blocks audio, a toast asks: "🔊 Ovozni eshitish uchun ekranga bir marta bosing".
+- Errors: permission denied, no mic, or unsupported browser each have a toast (`mic_*` keys).
+- If `RTCPeerConnection` is missing, all voice UI stays hidden.
 
 ## Chat and emoji
 

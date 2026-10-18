@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Server } from 'socket.io';
 import { createRoomManager } from './rooms.js';
+import { createIceProvider } from './voice.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -14,7 +15,8 @@ export function startServer(port = process.env.PORT || 3000) {
 
   const http = createServer(app);
   const io = new Server(http, { pingInterval: 10_000, pingTimeout: 20_000 });
-  createRoomManager(io);
+  const ice = createIceProvider({ keyId: process.env.TURN_KEY_ID, token: process.env.TURN_KEY_API_TOKEN });
+  createRoomManager(io, { ice });
 
   return new Promise((resolve) => {
     http.listen(port, () => resolve({ http, io, port: http.address().port }));
@@ -24,4 +26,5 @@ export function startServer(port = process.env.PORT || 3000) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const { port } = await startServer();
   console.log(`108 server: http://localhost:${port}`);
+  if (!process.env.TURN_KEY_ID) console.log('Voice: no TURN_KEY_ID, using STUN only');
 }

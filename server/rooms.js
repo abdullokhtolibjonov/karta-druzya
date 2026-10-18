@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import * as E from './game/engine.js';
 import { isCard, SUITS } from './game/cards.js';
+import { createIceProvider } from './voice.js';
 
 export const EMOJIS = ['😂', '😎', '😡', '😭', '🔥', '👏', '🤔', '😱', '🙏', '💀', '🤡', '❤️'];
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -13,6 +14,7 @@ const CHAT_GAP_MS = 700;
 const REACT_GAP_MS = 300;
 const LIST_ROOM = 'room-list'; // socket.io room of clients watching the public room list
 const LIST_THROTTLE_MS = 250;
+const SIGNAL_MAX_BYTES = 20_000; // one SDP offer/answer or ICE candidate
 
 const rooms = new Map();
 
@@ -32,7 +34,7 @@ function cleanName(name) {
 
 const validClientId = (id) => typeof id === 'string' && id.length >= 8 && id.length <= 64;
 
-export function createRoomManager(io, { now = () => Date.now() } = {}) {
+export function createRoomManager(io, { now = () => Date.now(), ice = createIceProvider() } = {}) {
   // ---------- room state ----------
 
   function createRoom() {
@@ -177,10 +179,14 @@ export function createRoomManager(io, { now = () => Date.now() } = {}) {
   function viewFor(room, member) {
     const v = E.viewFor(room.game, member?.pid);
     const connected = (pid) => (memberByPid(room, pid)?.sockets.size ?? 0) > 0;
-    v.players = v.players.map((p) => ({ ...p, connected: connected(p.id), isHost: p.id === room.hostPid }));
+    const voice = (pid) => {
+      const m = memberByPid(room, pid);
+      return { vid: m?.vid ?? null, mic: Boolean(m?.vid && m.mic) };
+    };
+    v.players = v.players.map((p) => ({ ...p, connected: connected(p.id), isHost: p.id === room.hostPid, ...voice(p.id) }));
     v.spectators = [...room.members.values()]
       .filter((m) => !isSeated(room, m.pid))
-      .map((m) => ({ id: m.pid, name: m.name, connected: m.sockets.size > 0, joinNext: m.joinNext }));
+      .map((m) => ({ id: m.pid, name: m.name, connected: m.sockets.size > 0, joinNext: m.joinNext, ...voice(m.pid) }));
     v.myId = member?.pid ?? null;
     v.isHost = member?.pid === room.hostPid;
     v.code = room.code;
@@ -203,8 +209,17 @@ export function createRoomManager(io, { now = () => Date.now() } = {}) {
 
   // ---------- socket handlers ----------
 
+  // Voice: the newest socket of a member is its voice endpoint. A new `vid` tells the
+  // other clients to drop their old peer connection and connect again.
+  function setVoiceSocket(member, sid) {
+    member.voiceSocket = sid;
+    member.vid = sid ? randomUUID().slice(0, 8) : null;
+    member.mic = false; // the client re-sends voice:mic after (re)joining
+  }
+
   function attach(socket, room, member) {
     member.sockets.add(socket.id);
+    setVoiceSocket(member, socket.id);
     clearTimeout(member.graceTimer);
     socket.data.code = room.code;
     socket.data.clientId = member.clientId;
@@ -220,6 +235,7 @@ export function createRoomManager(io, { now = () => Date.now() } = {}) {
     socket.data.code = null;
     if (!member) return { room, member: null };
     member.sockets.delete(socket.id);
+    if (member.voiceSocket === socket.id) setVoiceSocket(member, [...member.sockets].at(-1) ?? null);
     return { room, member };
   }
 
@@ -232,7 +248,7 @@ export function createRoomManager(io, { now = () => Date.now() } = {}) {
         E.renamePlayer(room.game, member.pid, name);
       }
     } else {
-      member = { pid: randomUUID().slice(0, 8), clientId, name, sockets: new Set(), joinNext: false, graceTimer: null, lastChat: 0, lastReact: 0 };
+      member = { pid: randomUUID().slice(0, 8), clientId, name, sockets: new Set(), joinNext: false, graceTimer: null, lastChat: 0, lastReact: 0, voiceSocket: null, vid: null, mic: false };
       room.members.set(clientId, member);
       const res = E.addPlayer(room.game, { id: member.pid, name });
       // R10.1: during a round (or when full) -> spectator, dealt in next round if possible.
@@ -353,6 +369,7 @@ export function createRoomManager(io, { now = () => Date.now() } = {}) {
         }
       }
       target.sockets.clear();
+      setVoiceSocket(target, null);
       removeMember(room, target);
       return { ok: true };
     });
@@ -397,6 +414,33 @@ export function createRoomManager(io, { now = () => Date.now() } = {}) {
       c.room.chat.push(msg);
       if (c.room.chat.length > 50) c.room.chat.shift();
       io.to(c.room.code).emit('chat', msg);
+      reply(ack, { ok: true });
+    });
+
+    // ---------- voice (WebRTC signalling only; audio goes peer to peer) ----------
+
+    on('voice:mic', {}, ({ member }, p) => {
+      if (typeof p.on !== 'boolean') return { ok: false, error: 'bad_request' };
+      if (member.voiceSocket !== socket.id) return { ok: false, error: 'not_in_room' };
+      member.mic = p.on;
+      return { ok: true };
+    });
+
+    socket.on('voice:ice', async (_p, ack) => {
+      if (!ctx(socket)) return reply(ack, { ok: false, error: 'not_in_room' });
+      reply(ack, { ok: true, iceServers: await ice.get() });
+    });
+
+    // { to: pid, vid: target's vid, data } -> target gets { from, vid: sender's vid, data }.
+    socket.on('voice:signal', (p = {}, ack) => {
+      const c = ctx(socket);
+      if (!c || c.member.voiceSocket !== socket.id) return reply(ack, { ok: false, error: 'not_in_room' });
+      const target = memberByPid(c.room, p?.to);
+      if (!target || target === c.member || !target.vid || target.vid !== p.vid) return reply(ack, { ok: false, error: 'not_found' });
+      if (!p.data || typeof p.data !== 'object' || JSON.stringify(p.data).length > SIGNAL_MAX_BYTES) {
+        return reply(ack, { ok: false, error: 'bad_request' });
+      }
+      io.to(target.voiceSocket).emit('voice:signal', { from: c.member.pid, vid: c.member.vid, data: p.data });
       reply(ack, { ok: true });
     });
 

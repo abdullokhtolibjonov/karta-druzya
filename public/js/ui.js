@@ -13,6 +13,10 @@ export const icons = {
   close: path('<path d="M6 6l12 12M18 6 6 18"/>'),
   send: path('<path d="M4 12 20 4l-6 16-3-7-7-1Z"/>'),
   x: path('<path d="M7 7l10 10M17 7 7 17"/>'),
+  mic: path('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>'),
+  micOff: path('<path d="M15 9.5V6a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 4.6 2.5M5.5 11a6.5 6.5 0 0 0 10.3 5.3M18.5 11a6.4 6.4 0 0 1-.6 2.7M12 17.5V21M3 3l18 18"/>'),
+  volume: path('<path d="M4 9.5h3.5L12 5v14l-4.5-4.5H4Z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>'),
+  volumeOff: path('<path d="M4 9.5h3.5L12 5v14l-4.5-4.5H4Z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>'),
 };
 
 export const $ = (sel, root = document) => root.querySelector(sel);
@@ -50,11 +54,14 @@ function hue(name) {
   return h;
 }
 
-export function avatarEl(name, { host = false, offline = false, size } = {}) {
+export function avatarEl(name, { host = false, offline = false, size, mic = false, muted = false } = {}) {
   const a = el('div', { class: 'avatar', style: { '--h': hue(name) } }, [[...name][0] ?? '?']);
   if (size) a.style.setProperty('--size', size + 'px');
   if (host) a.append(el('span', { class: 'crown', text: '👑' }));
   if (offline) a.append(el('span', { class: 'off-dot' }));
+  // Muted by me wins over "mic on": what matters to me is that I won't hear them.
+  if (muted) a.append(el('span', { class: 'voice-dot muted', html: icons.volumeOff }));
+  else if (mic) a.append(el('span', { class: 'voice-dot', html: icons.mic }));
   return a;
 }
 

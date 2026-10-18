@@ -1,6 +1,7 @@
 import { call } from './net.js';
 import { t, tErr } from './i18n.js';
 import { $, el, icons, toast, avatarEl } from './ui.js';
+import { voiceSupported, isMuted, toggleMute } from './voice.js';
 
 const TIMER_OPTIONS = [0, 15, 30, 60];
 
@@ -44,10 +45,18 @@ function playerRow(p, v, { spectator = false } = {}) {
   if (!p.connected) tags.push(t('offline'));
   if (spectator && p.joinNext) tags.push('⏳');
   const row = el('li', { class: 'player-row' + (p.connected ? '' : ' offline'), 'data-pid': p.id }, [
-    avatarEl(p.name, { host: p.isHost, offline: !p.connected }),
+    avatarEl(p.name, { host: p.isHost, offline: !p.connected, mic: p.mic, muted: isMuted(p.id) }),
     el('span', { class: 'name', text: p.name }),
     el('span', { class: 'tag', text: tags.join(' · ') }),
   ]);
+  if (voiceSupported && p.id !== v.myId && p.vid) {
+    row.append(el('button', {
+      class: 'icon-btn mute' + (isMuted(p.id) ? ' on' : ''),
+      html: isMuted(p.id) ? icons.volumeOff : icons.volume,
+      title: t('mute'), 'aria-label': t('mute'), 'aria-pressed': String(isMuted(p.id)),
+      onclick: () => toggleMute(p.id),
+    }));
+  }
   if (v.isHost && p.id !== v.myId) {
     row.append(el('button', {
       class: 'icon-btn kick', html: icons.x, 'aria-label': 'kick',
@@ -76,6 +85,7 @@ export function renderLobby(v) {
     specs.replaceChildren();
   }
 
+  $('#lobby-voice').classList.toggle('hidden', !voiceSupported);
   $('#lobby-host').classList.toggle('hidden', !v.isHost);
   $('#public-toggle').checked = v.settings.public;
   $('#timer-options').replaceChildren(...TIMER_OPTIONS.map((n) => el('button', {

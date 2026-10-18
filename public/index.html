@@ -70,6 +70,15 @@
           <ul class="player-list" id="lobby-players"></ul>
           <div id="lobby-spectators"></div>
         </div>
+        <div class="panel hidden" id="lobby-voice">
+          <div class="setting-row voice-row">
+            <span>
+              <span data-i18n="voice"></span>
+              <span class="muted small hint" data-i18n="voice_hint"></span>
+            </span>
+            <button class="btn btn-secondary mic-btn" id="btn-mic-lobby" type="button"></button>
+          </div>
+        </div>
         <div class="panel" id="lobby-host">
           <div class="setting-row">
             <span data-i18n="turn_timer"></span>
@@ -118,6 +127,7 @@
           <button class="btn btn-primary" id="btn-draw" type="button"></button>
           <button class="btn btn-secondary" id="btn-pass" type="button" data-i18n="pass"></button>
           <div class="spacer"></div>
+          <button class="icon-btn round mic-btn hidden" id="btn-mic" type="button"></button>
           <button class="icon-btn round" id="btn-emoji" type="button" aria-label="emoji"></button>
           <button class="icon-btn round" id="btn-chat" type="button" data-i18n-title="chat"><span class="badge hidden" id="chat-unread"></span></button>
         </div>

@@ -15,13 +15,15 @@
 ```
 server/
   index.js          Express + Socket.IO bootstrap, PORT env, static public/
-  rooms.js          Room manager: lobby, seats, host, timers, chat, socket handlers
+  rooms.js          Room manager: lobby, seats, host, timers, chat, voice signalling, socket handlers
+  voice.js          ICE servers for voice chat: Cloudflare TURN credentials (env) or STUN fallback
   game/
     cards.js        Deck creation, shuffle (injectable rng), points, card parsing
     engine.js       Pure rules engine (docs/RULES.md). No I/O, no timers, no sockets.
 test/
   engine.test.js    One or more tests per rule id (R1.1 …)
-  rooms.test.js     Integration test with socket.io-client (create/join/start/play)
+  rooms.test.js     Integration test with socket.io-client (create/join/start/play, list, voice)
+  voice.test.js     ICE provider: Cloudflare fetch, caching, port-53 filter, fallback
 public/
   index.html        Single page; screens are <section>s toggled by JS
   css/style.css     Design tokens, light/dark themes, layout, animations
@@ -34,6 +36,7 @@ public/
   js/table.js       Renders the game table from the view
   js/lobby.js       Home + lobby screens
   js/chat.js        Chat drawer, emoji bar, floating bubbles
+  js/voice.js       Voice chat: WebRTC mesh, mic toggle, local mute, speaking detection
   js/prefs.js       localStorage (theme, lang, name, clientId) with try/catch
 scripts/bots.mjs    Dev helper: bot players that join a room and play random legal moves
 docs/               RULES.md, ARCHITECTURE.md, UI.md, PLAN.md, DEPLOY.md
@@ -94,7 +97,7 @@ animates events whose `seq` it has not seen yet.
   myHand: [cardId], drawnCard,            // only for `me`
   playable: [cardId],                     // server-computed legal cards for me (UI hints)
   canDraw, canPass,
-  players: [{ id, name, seat, cardCount, score, status, connected, isHost, queenBonus }],
+  players: [{ id, name, seat, cardCount, score, status, connected, isHost, queenBonus, vid, mic }],
   spectators: [{ id, name }],
   lastRound, winnerId, standings?,        // standings when gameOver
   seq, events,
@@ -103,9 +106,12 @@ animates events whose `seq` it has not seen yet.
   myId,                                   // my public id (also set for spectators; `me` is null then)
   isHost, code, settings: { turnSeconds },
   turnEndsAt: epochMs | null, nextRoundAt: epochMs | null, serverNow,
-  spectators: [{ id, name, connected, joinNext }]
+  spectators: [{ id, name, connected, joinNext, vid, mic }]
 }
 ```
+
+`vid` is the member's current voice session id (`null` when not connected) and `mic` says
+whether their mic is on. See "Voice chat" below.
 
 ## Rooms (`server/rooms.js`)
 
@@ -149,6 +155,9 @@ Client → server (all with an ack callback `(res) => …`, `res = { ok, error?,
 | `game:pass` | – | turn player |
 | `chat:send` | `{ text }` (1–200 chars, trimmed, max 1 msg / 700 ms) | member |
 | `react:send` | `{ emoji }` (must be in `EMOJIS`) | member |
+| `voice:ice` | – → `{ ok, iceServers }` | member |
+| `voice:mic` | `{ on: boolean }` | member (its current voice socket) |
+| `voice:signal` | `{ to: pid, vid: target's vid, data }` (data ≤ 20 KB) | member (its current voice socket) |
 
 Server → client:
 
@@ -159,6 +168,7 @@ Server → client:
 | `react` | `{ playerId, emoji, ts }` |
 | `chat:history` | last 50 chat messages (sent on join) |
 | `rooms` | `RoomListItem[]` to subscribers, throttled (250 ms) after any room change |
+| `voice:signal` | `{ from: pid, vid: sender's vid, data }`, only to the target's voice socket |
 
 `RoomListItem = { code, host, players, max, phase, round }`. Only rooms with
 `settings.public === true` and at least one connected member are listed. They are sorted
@@ -166,8 +176,45 @@ lobby-first, then by player count. `players` counts non-eliminated seated player
 
 `EMOJIS = ['😂','😎','😡','😭','🔥','👏','🤔','😱','🙏','💀','🤡','❤️']`
 
+## Voice chat
+
+Everyone in the room (players, spectators, eliminated players) is in one WebRTC **mesh**:
+each pair has one `RTCPeerConnection`. The server only relays signalling; audio goes peer to
+peer, or through Cloudflare TURN when NAT blocks a direct path (common on mobile networks).
+
+- **Voice endpoint.** A member's newest socket is its voice socket. Every (re)attach gives the
+  member a new random `vid` and resets `mic` to `false`. When the last socket goes away, `vid`
+  becomes `null`. A changed `vid` tells the other clients to drop the old connection.
+- **Who offers.** For each pair, the member with the smaller `pid` sends the offer. Offers never
+  collide, so there is no "perfect negotiation" logic.
+- **One negotiation per connection.** The offer has one audio transceiver (`sendrecv`). The
+  answerer sets its transceiver to `sendrecv`. Mic on/off only calls `sender.replaceTrack()`,
+  so a live connection is never renegotiated. Everyone hears everyone as soon as they join.
+- **Signal data:** `{ type: 'offer'|'answer', sdp, cid }` or `{ type: 'cand', c, cid }`. `cid` is
+  a random id per connection attempt chosen by the offerer. Stale signals are ignored. Each
+  peer applies signals through a promise chain, so candidates never arrive before the
+  description.
+- **Retry.** Only the offering side retries: on `connectionState === 'failed'` or after 25 s
+  without connecting, it closes the connection and offers again (2 s, 4 s … up to 15 s).
+- **Mic state.** The client sends `voice:mic` after toggling. After a reconnect (mic reset by
+  the server), `syncVoice` sends it again if the mic is still on.
+- **Local mute** is client-only (`audio.muted`), per tab.
+- **Autoplay.** If `audio.play()` is blocked, a toast asks for one tap. Any `pointerdown` or
+  `keydown` retries blocked audio and resumes the `AudioContext`.
+- **Speaking ring.** An `AnalyserNode` per stream (remote and my mic). Every 120 ms, an RMS above
+  0.03 adds `.speaking` to every `[data-pid] .avatar` of that player for 400 ms.
+- **ICE servers** come from `voice:ice`. With `TURN_KEY_ID` and `TURN_KEY_API_TOKEN` set, the
+  server calls Cloudflare
+  `POST https://rtc.live.cloudflare.com/v1/turn/keys/{id}/credentials/generate-ice-servers`
+  with `{ ttl: 86400 }`. It caches the result for 12 h and drops `:53` urls (browsers time
+  out on them). On error it falls back to STUN and retries after 60 s. With no keys, it
+  uses STUN only.
+
 ## Security notes
 
 - Never send other players' hands. `viewFor` is the only serialiser.
 - Escape chat text on the client (`textContent`, never `innerHTML`).
 - Validate every payload type and length on the server.
+- Voice signals are relayed only between members of the same room, only from and to the
+  current voice socket, and only when the target `vid` matches. The TURN API token never
+  leaves the server; clients get short-lived credentials.

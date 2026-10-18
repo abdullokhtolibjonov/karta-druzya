@@ -5,6 +5,7 @@ import { sortHand, suitIcon, parse, SUIT_ORDER } from './cards.js';
 import { $, el, toast, cardEl, avatarEl, openModal, closeModal, modalKey, setModalKey, confetti } from './ui.js';
 import { store, serverNow, nameOf } from './state.js';
 import { leaveRoomLocal } from './main.js';
+import { voiceSupported, isMuted, toggleMute } from './voice.js';
 
 const finePointer = matchMedia('(hover: hover) and (pointer: fine)');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -57,6 +58,13 @@ export function initTable() {
   $('#deck').addEventListener('click', () => { if (store.view?.canDraw) act('game:draw'); });
   $('#btn-draw').addEventListener('click', () => act('game:draw'));
   $('#btn-pass').addEventListener('click', () => act('game:pass'));
+  // Tapping someone's seat mutes or unmutes them (only for me).
+  $('#opponents').addEventListener('click', (e) => {
+    const pid = e.target.closest('.seat')?.dataset.pid;
+    const v = store.view;
+    if (!voiceSupported || !pid || !v || pid === v.myId) return;
+    toast(t(toggleMute(pid) ? 'muted_name' : 'unmuted_name', { name: nameOf(v, pid) }));
+  });
   addEventListener('resize', () => layoutHand());
   setInterval(tickTimer, 200);
 }
@@ -72,7 +80,7 @@ function seatOrder(v) {
 function seatEl(p, v) {
   const isTurn = v.phase === 'playing' && v.turn === p.id;
   const out = p.status === 'finished' || p.status === 'eliminated';
-  const av = avatarEl(p.name, { host: p.isHost, offline: !p.connected });
+  const av = avatarEl(p.name, { host: p.isHost, offline: !p.connected, mic: p.mic, muted: isMuted(p.id) });
   if (isTurn) av.classList.add('turn');
   const fan = el('div', { class: 'mini-fan' });
   const n = Math.min(p.cardCount, 5);
@@ -95,6 +103,15 @@ function seatEl(p, v) {
       el('span', { class: 'score-pill' + (p.score >= 90 ? ' hot' : ''), text: p.score }),
       tag ? el('span', { class: 'seat-tag', text: tag }) : null,
     ]),
+  ]);
+}
+
+// Spectators sit at the end of the row, small, so their chat bubbles and voice rings show.
+function watcherEl(s) {
+  return el('div', { class: 'seat watcher', 'data-pid': s.id }, [
+    avatarEl(s.name, { mic: s.mic, muted: isMuted(s.id) }),
+    el('div', { class: 'seat-name', text: s.name }),
+    el('div', { class: 'seat-tag', text: '👁 ' + t('watching') }),
   ]);
 }
 
@@ -175,7 +192,7 @@ function renderMe(v) {
     bar.replaceChildren();
     return;
   }
-  const av = avatarEl(meP.name, { host: meP.isHost });
+  const av = avatarEl(meP.name, { host: meP.isHost, mic: meP.mic });
   if (v.phase === 'playing' && v.turn === v.me) av.classList.add('turn');
   bar.replaceChildren(
     el('div', { 'data-pid': meP.id, style: { display: 'contents' } }, av),
@@ -249,7 +266,10 @@ function snapshot() {
 
 export function renderTable(v, prev) {
   const snap = snapshot();
-  $('#opponents').replaceChildren(...seatOrder(v).map((p) => seatEl(p, v)));
+  $('#opponents').replaceChildren(
+    ...seatOrder(v).map((p) => seatEl(p, v)),
+    ...v.spectators.filter((s) => s.id !== v.myId && s.connected).map((s) => watcherEl(s)),
+  );
   renderPiles(v);
   renderStatus(v);
   renderMe(v);

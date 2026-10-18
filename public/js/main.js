@@ -7,6 +7,7 @@ import { store } from './state.js';
 import { renderLobby, initLobby } from './lobby.js';
 import { renderTable, initTable, renderOverlays } from './table.js';
 import { initChat, resetChat } from './chat.js';
+import { initVoice, syncVoice, stopVoice, toggleMic, micOn, onVoiceChange, voiceSupported } from './voice.js';
 
 // ---------- static setup ----------
 
@@ -117,7 +118,23 @@ function topbarInfo() {
   info.replaceChildren(...items);
 }
 
+function renderMic() {
+  const on = micOn();
+  const label = t(on ? 'mic_turn_off' : 'mic_turn_on');
+  const game = $('#btn-mic');
+  game.classList.toggle('hidden', !voiceSupported);
+  game.classList.toggle('on', on);
+  game.innerHTML = on ? icons.mic : icons.micOff;
+  game.title = label;
+  game.setAttribute('aria-pressed', String(on));
+  const lobby = $('#btn-mic-lobby');
+  lobby.classList.toggle('on', on);
+  lobby.replaceChildren(el('span', { html: on ? icons.mic : icons.micOff }), label);
+  lobby.setAttribute('aria-pressed', String(on));
+}
+
 function render() {
+  renderMic();
   const v = store.view;
   if (!v) {
     show('home');
@@ -159,6 +176,7 @@ export function leaveRoomLocal(message) {
   setUrl(null);
   closeModal();
   resetChat();
+  stopVoice();
   if (message) toast(message);
   render();
 }
@@ -248,6 +266,7 @@ socket.on('state', (v) => {
   store.view = v;
   if (store.selected && !v.myHand.includes(store.selected)) store.selected = null;
   render();
+  syncVoice(v);
 });
 
 socket.on('kicked', () => leaveRoomLocal(t('kicked')));
@@ -274,6 +293,9 @@ socket.on('disconnect', () => {
 initLobby();
 initTable();
 initChat();
+initVoice();
+onVoiceChange(() => render());
+for (const id of ['#btn-mic', '#btn-mic-lobby']) $(id).addEventListener('click', toggleMic);
 refreshTexts();
 
 store.name = prefs.get('name') ?? '';

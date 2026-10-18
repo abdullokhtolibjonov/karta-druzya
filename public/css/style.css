@@ -11,6 +11,7 @@
   --accent-2: #ffd36a;
   --accent-ink: #2a1a00;
   --danger: #ef5b5b;
+  --voice: #2fbf71;
   --ok: #49c27c;
   --felt-1: #1f6b4a;
   --felt-2: #0c3826;
@@ -37,6 +38,7 @@
   --accent-2: #ffcf5a;
   --accent-ink: #2a1a00;
   --danger: #d23c3c;
+  --voice: #1f9d5a;
   --felt-1: #3f9a6e;
   --felt-2: #1f6a48;
   --felt-edge: #8a5a32;
@@ -248,6 +250,15 @@ input:focus { border-color: var(--accent); }
   mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
 }
 .avatar.turn { animation: glow 1.6s ease-in-out infinite; }
+.avatar .voice-dot {
+  position: absolute; bottom: -3px; left: -3px;
+  width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--voice); color: #fff; border: 2px solid var(--surface);
+}
+.avatar .voice-dot.muted { background: var(--danger); }
+.avatar .voice-dot svg { width: 10px; height: 10px; stroke-width: 3; }
+.avatar.speaking { outline: 3px solid var(--voice); outline-offset: 2px; }
 .avatar.urgent::before { background: conic-gradient(var(--danger) calc(var(--p, 1) * 1turn), rgba(255, 255, 255, .12) 0); }
 
 /* ---------- cards ---------- */
@@ -366,7 +377,16 @@ input:focus { border-color: var(--accent); }
 .hand-note { width: 100%; text-align: center; color: var(--muted); font-weight: 800; padding: 24px 0; }
 
 .actions { display: flex; align-items: center; gap: 8px; padding: 0 2px; }
-.actions .btn { min-width: 108px; }
+.actions .btn { flex: 0 1 108px; min-width: 0; padding-inline: 10px; white-space: nowrap; }
+.actions .icon-btn.round { flex: none; }
+.mic-btn.on { background: var(--voice); color: #fff; border-color: transparent; }
+.voice-row { flex-wrap: nowrap; }
+.voice-row .hint { display: block; font-weight: 600; }
+.voice-row .mic-btn { flex: none; }
+.player-row .mute.on { color: var(--danger); }
+.seat.watcher { width: 62px; opacity: .85; }
+.seat.watcher .avatar { --size: 32px; }
+.seat.watcher .seat-tag { font-size: .62rem; }
 .emoji-bar {
   position: absolute; right: 10px; bottom: calc(66px + env(safe-area-inset-bottom));
   display: grid; grid-template-columns: repeat(6, 44px); gap: 4px;
@@ -475,12 +495,19 @@ input:focus { border-color: var(--accent); }
   :root { --cw-hand: clamp(64px, min(9vw, 15dvh), 108px); --cw-pile: clamp(64px, min(10vw, 13dvh), 128px); }
   .seat { width: 92px; }
   .seat .avatar { --size: 52px; }
-  .actions .btn { min-width: 140px; }
+  .actions .btn { flex-basis: 140px; }
 }
 @media (max-height: 640px) and (max-width: 699px) {
   :root { --cw-hand: clamp(54px, 16vw, 80px); --cw-pile: clamp(58px, 17vw, 90px); }
   .opponents .avatar { --size: 36px; }
+  .opponents .watcher .avatar { --size: 28px; }
   .felt { gap: 8px; padding: 8px; }
+}
+
+@media (max-width: 400px) {
+  .actions { gap: 6px; }
+  .actions .icon-btn.round { width: 44px; height: 44px; }
+  .actions .btn { font-size: .92rem; padding-inline: 8px; overflow: hidden; text-overflow: ellipsis; }
 }
 
 /* ---------- keyframes ---------- */

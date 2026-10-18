@@ -134,3 +134,44 @@ test('public room list: live updates, hidden rooms, empty rooms', async () => {
 
   assert.ok((await call(watcher, 'rooms:unsubscribe')).ok);
 });
+
+test('voice: mic state, signal relay, ice servers', async () => {
+  const a = client();
+  const b = client();
+  const { code } = await call(a, 'room:create', { name: 'Ali', clientId: 'client-voice-a' });
+  await call(b, 'room:join', { code, name: 'Vali', clientId: 'client-voice-b' });
+  await tick();
+  const meA = a.last.players.find((p) => p.id === a.last.myId);
+  const meB = b.last.players.find((p) => p.id === b.last.myId);
+  assert.equal(meA.vid.length, 8);
+  assert.equal(meA.mic, false);
+
+  assert.equal((await call(a, 'voice:mic', { on: 'yes' })).error, 'bad_request');
+  assert.ok((await call(a, 'voice:mic', { on: true })).ok);
+  await tick();
+  assert.equal(b.last.players.find((p) => p.id === meA.id).mic, true);
+
+  // Relay to the target's current vid only.
+  const got = new Promise((r) => b.once('voice:signal', r));
+  assert.ok((await call(a, 'voice:signal', { to: meB.id, vid: meB.vid, data: { type: 'offer', sdp: 'x' } })).ok);
+  assert.deepEqual(await got, { from: meA.id, vid: meA.vid, data: { type: 'offer', sdp: 'x' } });
+  assert.equal((await call(a, 'voice:signal', { to: meB.id, vid: 'stale000', data: {} })).error, 'not_found');
+  assert.equal((await call(a, 'voice:signal', { to: meA.id, vid: meA.vid, data: {} })).error, 'not_found');
+  assert.equal((await call(a, 'voice:signal', { to: meB.id, vid: meB.vid, data: 'x' })).error, 'bad_request');
+  assert.equal((await call(a, 'voice:signal', { to: meB.id, vid: meB.vid, data: { sdp: 'x'.repeat(30000) } })).error, 'bad_request');
+
+  // Without TURN keys the server hands out STUN only.
+  const ice = await call(a, 'voice:ice');
+  assert.ok(ice.ok);
+  assert.ok(ice.iceServers[0].urls.some((u) => u.startsWith('stun:')));
+
+  // Reconnect: new vid, mic reset until the client says otherwise.
+  b.close();
+  await tick();
+  assert.equal(a.last.players.find((p) => p.id === meB.id).vid, null);
+  const b2 = client();
+  await call(b2, 'room:join', { code, name: 'Vali', clientId: 'client-voice-b' });
+  await tick();
+  const vid2 = a.last.players.find((p) => p.id === meB.id).vid;
+  assert.ok(vid2 && vid2 !== meB.vid);
+});

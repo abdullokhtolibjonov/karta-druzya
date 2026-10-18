@@ -30,7 +30,14 @@ Work phase by phase. At the end of each phase run `npm test` and tick the boxes.
 ## Phase 6 — Verify and deploy
 - [x] Manual test with several browser windows (incl. mobile viewport)
 - [x] `render.yaml`, docs/DEPLOY.md
-- [ ] Push to GitHub, deploy on Render
+- [x] Push to GitHub, deploy on Render (https://karta-druzya.onrender.com)
+
+## Phase 7 — Voice chat
+- [x] Server: `voice:ice` / `voice:mic` / `voice:signal`, vid per voice socket, Cloudflare TURN provider
+- [x] Client: WebRTC mesh, mic toggle (lobby + game), local mute, speaking ring, autoplay unlock
+- [x] Tests (relay, mic state, reconnect vid, ICE provider) and a two-browser check
+- [ ] Owner adds Cloudflare TURN keys in Render (docs/DEPLOY.md)
+- [ ] Real test on phones over mobile data
 
 ## Backlog / ideas
 - Sound effects (play, draw, your turn) with a mute toggle
