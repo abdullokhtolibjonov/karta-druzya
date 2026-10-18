@@ -11,6 +11,8 @@ const LOBBY_GRACE_MS = 30_000;
 const EMPTY_ROOM_MS = 10 * 60_000;
 const CHAT_GAP_MS = 700;
 const REACT_GAP_MS = 300;
+const LIST_ROOM = 'room-list'; // socket.io room of clients watching the public room list
+const LIST_THROTTLE_MS = 250;
 
 const rooms = new Map();
 
@@ -39,7 +41,7 @@ export function createRoomManager(io, { now = () => Date.now() } = {}) {
       game: E.createGame(),
       members: new Map(), // clientId -> member
       hostPid: null,
-      settings: { turnSeconds: 30 },
+      settings: { turnSeconds: 30, public: true },
       timer: null,
       timerKey: null,
       turnEndsAt: null,
@@ -82,11 +84,37 @@ export function createRoomManager(io, { now = () => Date.now() } = {}) {
   }
 
   function destroyRoom(room) {
+    broadcastList();
     clearTimeout(room.timer);
     clearTimeout(room.nextRoundTimer);
     clearTimeout(room.emptyTimer);
     for (const m of room.members.values()) clearTimeout(m.graceTimer);
     rooms.delete(room.code);
+  }
+
+  // ---------- public room list ----------
+
+  function publicList() {
+    return [...rooms.values()]
+      .filter((r) => r.settings.public && [...r.members.values()].some((m) => m.sockets.size > 0))
+      .map((r) => ({
+        code: r.code,
+        host: memberByPid(r, r.hostPid)?.name ?? '?',
+        players: E.aliveCount(r.game),
+        max: E.MAX_PLAYERS,
+        phase: r.game.phase,
+        round: r.game.round,
+      }))
+      .sort((a, b) => (a.phase === 'lobby' ? 0 : 1) - (b.phase === 'lobby' ? 0 : 1) || a.players - b.players);
+  }
+
+  let listTimer = null;
+  function broadcastList() {
+    if (listTimer) return;
+    listTimer = setTimeout(() => {
+      listTimer = null;
+      io.to(LIST_ROOM).emit('rooms', publicList());
+    }, LIST_THROTTLE_MS);
   }
 
   function checkEmpty(room) {
@@ -164,6 +192,7 @@ export function createRoomManager(io, { now = () => Date.now() } = {}) {
   }
 
   function sync(room) {
+    broadcastList();
     if (!rooms.has(room.code)) return;
     armTimers(room);
     for (const m of room.members.values()) {
@@ -225,6 +254,16 @@ export function createRoomManager(io, { now = () => Date.now() } = {}) {
 
   function onConnection(socket) {
     socket.data.code = null;
+
+    socket.on('rooms:subscribe', (_p, ack) => {
+      socket.join(LIST_ROOM);
+      reply(ack, { ok: true, rooms: publicList() });
+    });
+
+    socket.on('rooms:unsubscribe', (_p, ack) => {
+      socket.leave(LIST_ROOM);
+      reply(ack, { ok: true });
+    });
 
     socket.on('room:create', (payload = {}, ack) => {
       const name = cleanName(payload.name);
@@ -289,9 +328,16 @@ export function createRoomManager(io, { now = () => Date.now() } = {}) {
     }
 
     on('room:settings', { host: true }, ({ room }, p) => {
-      if (!TURN_OPTIONS.includes(p.turnSeconds)) return { ok: false, error: 'bad_request' };
-      room.settings.turnSeconds = p.turnSeconds;
-      room.timerKey = null;
+      const hasTimer = 'turnSeconds' in p;
+      const hasPublic = 'public' in p;
+      if (!hasTimer && !hasPublic) return { ok: false, error: 'bad_request' };
+      if (hasTimer && !TURN_OPTIONS.includes(p.turnSeconds)) return { ok: false, error: 'bad_request' };
+      if (hasPublic && typeof p.public !== 'boolean') return { ok: false, error: 'bad_request' };
+      if (hasTimer) {
+        room.settings.turnSeconds = p.turnSeconds;
+        room.timerKey = null;
+      }
+      if (hasPublic) room.settings.public = p.public;
       return { ok: true };
     });
 

@@ -36,14 +36,21 @@ The card faces stay white in both themes, like real cards.
 - Button **Xona ochish / Create room**.
 - Code input (4 chars, uppercase) + **Kirish / Join**.
 - If the URL has `?r=CODE`, prefill the code and focus the nickname.
+- **Open rooms** list below the join form, live while the home screen is shown
+  (`rooms:subscribe` / `rooms:unsubscribe`). Each row has the host avatar, "{host} xonasi",
+  `players/6 · status` (green dot = waiting, gold dot = playing), and a button:
+  **Kirish** (primary) for a lobby with space, otherwise **Tomosha** (secondary), which joins as a
+  spectator (R10.1). The button uses the nickname field. Empty list: "Hozircha ochiq xona yo'q".
 
 ### 2. Lobby
 - Big room code + **Havolani ulashish / Share link** button. Uses the Web Share API, falls
   back to clipboard, and shows a toast.
 - Player list: avatar circle (initial and a colour hashed from the name), name,
   👑 for the host, "(siz)" for me, and a dim style for disconnected players.
-- Host only: timer setting (Off / 15 / 30 / 60), **Boshlash / Start** (disabled when < 2 players),
+- Host only: timer setting (Off / 15 / 30 / 60), **Hammaga ko'rinsin** switch (on by default; off
+  hides the room from the open rooms list), **Boshlash / Start** (disabled when < 2 players),
   and a kick ✕ on each player.
+- Everyone sees "🔒 Yopiq xona" next to the player count when the room is hidden.
 - Rules summary in a collapsible `<details>`.
 
 ### 3. Table (game)

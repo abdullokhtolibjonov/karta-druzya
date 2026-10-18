@@ -52,6 +52,8 @@
           <input id="input-code" class="code-input" maxlength="4" data-i18n-ph="code_ph" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
           <button class="btn btn-secondary" type="submit" data-i18n="join"></button>
         </form>
+        <div class="divider"><span data-i18n="open_rooms"></span></div>
+        <ul class="room-list" id="room-list"></ul>
       </div>
     </section>
 
@@ -73,6 +75,13 @@
             <span data-i18n="turn_timer"></span>
             <div class="segmented" id="timer-options"></div>
           </div>
+          <label class="setting-row switch-row">
+            <span>
+              <span data-i18n="public_room"></span>
+              <span class="muted small hint" data-i18n="public_hint"></span>
+            </span>
+            <input type="checkbox" class="switch" id="public-toggle">
+          </label>
         </div>
         <button class="btn btn-primary btn-lg" id="btn-start" type="button" data-i18n="start"></button>
         <p class="muted center" id="lobby-wait"></p>

@@ -2,7 +2,7 @@ import { socket, call } from './net.js';
 import { prefs, clientId } from './prefs.js';
 import { t, tErr, getLang, setLang, applyStatic, LANGS } from './i18n.js';
 import { spriteSVG } from './cards.js';
-import { $, el, icons, toast, cardEl, openModal, closeModal, confirmDialog } from './ui.js';
+import { $, el, icons, toast, cardEl, avatarEl, openModal, closeModal, confirmDialog } from './ui.js';
 import { store } from './state.js';
 import { renderLobby, initLobby } from './lobby.js';
 import { renderTable, initTable, renderOverlays } from './table.js';
@@ -37,6 +37,7 @@ function refreshTexts() {
   applyStatic();
   $('#rules-list').replaceChildren(...t('rules_body').map((r) => el('li', { text: r })));
   if (store.view) render();
+  else renderRooms();
 }
 
 // Hero fan on the home screen.
@@ -50,7 +51,58 @@ const fan = $('#hero-fan');
 
 // ---------- screens ----------
 
+// ---------- open rooms list (home screen) ----------
+
+let listening = false;
+
+async function watchRooms(on) {
+  if (on === listening) return;
+  listening = on;
+  if (!on) return void call('rooms:unsubscribe');
+  const res = await call('rooms:subscribe');
+  if (res.ok && listening) renderRooms(res.rooms);
+}
+
+function roomStatus(r) {
+  if (r.phase === 'lobby') return r.players >= r.max ? t('st_full') : t('st_waiting');
+  if (r.phase === 'gameOver') return t('st_over');
+  return t('st_round', { n: r.round });
+}
+
+let lastRooms = [];
+function renderRooms(rooms = lastRooms) {
+  lastRooms = rooms;
+  const list = $('#room-list');
+  if (!rooms.length) return list.replaceChildren(el('li', { class: 'room-empty', text: t('no_rooms') }));
+  list.replaceChildren(...rooms.map((r) => {
+    // A full lobby or a running game can still be entered as a spectator (R10.1).
+    const asPlayer = r.phase === 'lobby' && r.players < r.max;
+    return el('li', { class: 'room-item' }, [
+      avatarEl(r.host, { host: true }),
+      el('div', { class: 'info' }, [
+        el('div', { class: 'title', text: t('room_of', { name: r.host }) }),
+        el('div', { class: 'meta' }, [
+          el('span', { class: 'dot' + (r.phase === 'lobby' ? '' : ' busy') }),
+          el('span', { text: `${r.players}/${r.max} · ${roomStatus(r)}` }),
+        ]),
+      ]),
+      el('button', {
+        type: 'button',
+        class: 'btn ' + (asPlayer ? 'btn-primary' : 'btn-secondary'),
+        text: asPlayer ? t('join') : t('watch'),
+        onclick: () => {
+          const name = readName();
+          if (name) join(r.code, name);
+        },
+      }),
+    ]);
+  }));
+}
+
+socket.on('rooms', (rooms) => { if (listening) renderRooms(rooms); });
+
 function show(screen) {
+  watchRooms(screen === 'home');
   for (const s of ['home', 'lobby', 'game']) $('#screen-' + s).classList.toggle('hidden', s !== screen);
   $('#btn-menu').classList.toggle('hidden', screen === 'home');
   document.body.dataset.screen = screen;
@@ -203,6 +255,11 @@ socket.on('kicked', () => leaveRoomLocal(t('kicked')));
 let everConnected = false;
 socket.on('connect', async () => {
   $('#conn').classList.add('hidden');
+  // The server forgets list subscriptions on reconnect; subscribe again if it is showing.
+  if (listening) {
+    listening = false;
+    watchRooms(true);
+  }
   if (everConnected && store.code && store.name) {
     await join(store.code, store.name);
   }

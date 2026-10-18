@@ -92,3 +92,45 @@ test('create, join, start, play, chat, reconnect', async () => {
   assert.equal(c.last.players.length, 3);
   assert.equal(c.last.phase, 'lobby');
 });
+
+test('public room list: live updates, hidden rooms, empty rooms', async () => {
+  const watcher = client();
+  let latest = null;
+  watcher.on('rooms', (list) => { latest = list; });
+  const sub = await call(watcher, 'rooms:subscribe');
+  assert.ok(sub.ok);
+  assert.ok(Array.isArray(sub.rooms));
+
+  const h = client();
+  const { code } = await call(h, 'room:create', { name: 'Malika', clientId: 'client-list-h' });
+  await tick(400);
+  const entry = latest.find((r) => r.code === code);
+  assert.deepEqual(entry, { code, host: 'Malika', players: 1, max: 6, phase: 'lobby', round: 0 });
+
+  const g = client();
+  await call(g, 'room:join', { code, name: 'Jasur', clientId: 'client-list-g' });
+  await tick(400);
+  assert.equal(latest.find((r) => r.code === code).players, 2);
+
+  // Only the host may hide; hidden rooms disappear from the list.
+  assert.equal((await call(g, 'room:settings', { public: false })).error, 'host_only');
+  assert.equal((await call(h, 'room:settings', { public: 'no' })).error, 'bad_request');
+  assert.ok((await call(h, 'room:settings', { public: false })).ok);
+  await tick(400);
+  assert.equal(latest.some((r) => r.code === code), false);
+  assert.equal(h.last.settings.public, false);
+  // Still joinable by code.
+  const k = client();
+  assert.ok((await call(k, 'room:join', { code, name: 'Kamola', clientId: 'client-list-k' })).ok);
+
+  assert.ok((await call(h, 'room:settings', { public: true })).ok);
+  await tick(400);
+  assert.ok(latest.some((r) => r.code === code));
+
+  // A room with nobody connected is not listed.
+  h.close(); g.close(); k.close();
+  await tick(400);
+  assert.equal(latest.some((r) => r.code === code), false);
+
+  assert.ok((await call(watcher, 'rooms:unsubscribe')).ok);
+});

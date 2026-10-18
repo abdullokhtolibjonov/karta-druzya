@@ -115,6 +115,8 @@ animates events whose `seq` it has not seen yet.
   other clients only see a random public id (`pid`, used as the engine player id).
 - In the lobby, a member with no connected sockets is removed after a 30 s grace period
   (so a page refresh keeps the seat).
+- Visibility: `settings.public` (default `true`). The host can hide the room from the public list;
+  a hidden room can still be joined by link or code.
 - Host: the first person who joins. If the host leaves, the next seated player becomes host.
 - Max 6 seated players. Others are spectators. Joining while `phase` is `playing` or
   `roundOver` makes the person a spectator with `joinNext: true` (R10.1).
@@ -134,7 +136,9 @@ Client → server (all with an ack callback `(res) => …`, `res = { ok, error?,
 | `room:create` | `{ name, clientId }` → `{ ok, code }` | anyone |
 | `room:join` | `{ code, name, clientId }` | anyone |
 | `room:leave` | – | member |
-| `room:settings` | `{ turnSeconds: 0\|15\|30\|60 }` | host, lobby only |
+| `room:settings` | `{ turnSeconds?: 0\|15\|30\|60, public?: boolean }` (at least one) | host |
+| `rooms:subscribe` | – → `{ ok, rooms: RoomListItem[] }`, then live `rooms` events | anyone (home screen) |
+| `rooms:unsubscribe` | – | anyone |
 | `room:kick` | `{ playerId }` | host |
 | `game:start` | – | host (≥ 2 players) |
 | `game:next` | – | host, in roundOver |
@@ -154,6 +158,11 @@ Server → client:
 | `chat` | `{ id, playerId, name, text, ts }` |
 | `react` | `{ playerId, emoji, ts }` |
 | `chat:history` | last 50 chat messages (sent on join) |
+| `rooms` | `RoomListItem[]` to subscribers, throttled (250 ms) after any room change |
+
+`RoomListItem = { code, host, players, max, phase, round }`. Only rooms with
+`settings.public === true` and at least one connected member are listed. They are sorted
+lobby-first, then by player count. `players` counts non-eliminated seated players.
 
 `EMOJIS = ['😂','😎','😡','😭','🔥','👏','🤔','😱','🙏','💀','🤡','❤️']`
 

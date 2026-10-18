@@ -10,6 +10,14 @@ export function initLobby() {
     if (!res.ok) toast(tErr(res.error), { error: true });
   });
 
+  $('#public-toggle').addEventListener('change', async (e) => {
+    const res = await call('room:settings', { public: e.target.checked });
+    if (!res.ok) {
+      e.target.checked = !e.target.checked;
+      toast(tErr(res.error), { error: true });
+    }
+  });
+
   $('#btn-share').addEventListener('click', async () => {
     const url = location.href;
     if (navigator.share) {
@@ -55,7 +63,7 @@ function playerRow(p, v, { spectator = false } = {}) {
 export function renderLobby(v) {
   $('#lobby-code').textContent = v.code;
   $('#btn-share').replaceChildren(el('span', { html: icons.share }), t('share_link'));
-  $('#lobby-count').textContent = `${v.players.length}/6`;
+  $('#lobby-count').textContent = `${v.players.length}/6` + (v.settings.public ? '' : ` · ${t('private_room')}`);
   $('#lobby-players').replaceChildren(...v.players.map((p) => playerRow(p, v)));
 
   const specs = $('#lobby-spectators');
@@ -69,6 +77,7 @@ export function renderLobby(v) {
   }
 
   $('#lobby-host').classList.toggle('hidden', !v.isHost);
+  $('#public-toggle').checked = v.settings.public;
   $('#timer-options').replaceChildren(...TIMER_OPTIONS.map((n) => el('button', {
     type: 'button',
     class: v.settings.turnSeconds === n ? 'on' : '',
