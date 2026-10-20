@@ -87,9 +87,11 @@ export function openModal(content, { dismissible = true, onClose } = {}) {
   const backdrop = el('div', { class: 'modal-backdrop' }, modal);
   if (dismissible) backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
   $('#modal-root').append(backdrop);
-  current = { backdrop, onClose, key: null };
+  current = { backdrop, onClose, key: null, dismissible };
   return current;
 }
+
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && current?.dismissible) closeModal(); });
 
 export function closeModal() {
   if (!current) return;

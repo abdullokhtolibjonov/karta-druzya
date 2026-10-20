@@ -253,6 +253,7 @@ $('#btn-menu').addEventListener('click', () => {
       }
     },
   }));
+  items.push(el('button', { class: 'btn btn-secondary btn-lg', text: t('close'), onclick: () => closeModal() }));
   openModal([el('h2', { text: t('menu') }), el('div', { class: 'stack' }, items)]);
 });
 

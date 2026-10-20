@@ -92,12 +92,14 @@
             <input type="checkbox" class="switch" id="public-toggle">
           </label>
         </div>
-        <button class="btn btn-primary btn-lg" id="btn-start" type="button" data-i18n="start"></button>
-        <p class="muted center" id="lobby-wait"></p>
         <details class="panel rules">
           <summary data-i18n="rules"></summary>
           <ul id="rules-list"></ul>
         </details>
+        <div class="lobby-cta">
+          <button class="btn btn-primary btn-lg" id="btn-start" type="button" data-i18n="start"></button>
+          <p class="muted center" id="lobby-wait"></p>
+        </div>
       </div>
     </section>
 
@@ -107,7 +109,7 @@
         <div class="opponents" id="opponents"></div>
         <div class="felt" id="felt">
           <div class="pile-row">
-            <button class="deck" id="deck" type="button" aria-label="deck">
+            <button class="deck" id="deck" type="button" data-i18n-title="deck">
               <div class="deck-stack" id="deck-stack"></div>
               <span class="deck-count" id="deck-count"></span>
             </button>
@@ -128,7 +130,7 @@
           <button class="btn btn-secondary" id="btn-pass" type="button" data-i18n="pass"></button>
           <div class="spacer"></div>
           <button class="icon-btn round mic-btn hidden" id="btn-mic" type="button"></button>
-          <button class="icon-btn round" id="btn-emoji" type="button" aria-label="emoji"></button>
+          <button class="icon-btn round" id="btn-emoji" type="button" data-i18n-title="reactions"></button>
           <button class="icon-btn round" id="btn-chat" type="button" data-i18n-title="chat"><span class="badge hidden" id="chat-unread"></span></button>
         </div>
         <div class="emoji-bar hidden" id="emoji-bar"></div>
@@ -139,12 +141,12 @@
   <aside class="chat-panel" id="chat-panel" aria-hidden="true">
     <div class="chat-head">
       <strong data-i18n="chat"></strong>
-      <button class="icon-btn" id="chat-close" type="button" aria-label="close"></button>
+      <button class="icon-btn" id="chat-close" type="button" data-i18n-title="close"></button>
     </div>
     <div class="chat-list" id="chat-list"></div>
     <form class="chat-form" id="chat-form" autocomplete="off">
       <input id="chat-input" maxlength="200" data-i18n-ph="chat_ph" enterkeyhint="send">
-      <button class="btn btn-primary" type="submit" id="chat-send" aria-label="send"></button>
+      <button class="btn btn-primary" type="submit" id="chat-send" data-i18n-title="send"></button>
     </form>
   </aside>
 

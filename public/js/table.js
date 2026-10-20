@@ -45,6 +45,13 @@ async function playCard(id) {
   await act('game:play', { cardId: id, suit });
 }
 
+function select(id) {
+  store.selected = id;
+  for (const c of $('#hand').children) c.classList.toggle('selected', !!id && c.dataset.card === id);
+  if (store.view) renderStatus(store.view);
+  tickTimer();
+}
+
 export function initTable() {
   $('#hand').addEventListener('click', (e) => {
     const node = e.target.closest('.card');
@@ -52,8 +59,11 @@ export function initTable() {
     if (!node || !v || v.turn !== v.me) return;
     const id = node.dataset.card;
     if (finePointer.matches || store.selected === id) return playCard(id);
-    store.selected = id;
-    for (const c of $('#hand').children) c.classList.toggle('selected', c.dataset.card === id);
+    select(id);
+  });
+  // Tapping anywhere else on the table puts a selected card back.
+  $('#screen-game').addEventListener('click', (e) => {
+    if (store.selected && !e.target.closest('#hand .card')) select(null);
   });
   $('#deck').addEventListener('click', () => { if (store.view?.canDraw) act('game:draw'); });
   $('#btn-draw').addEventListener('click', () => act('game:draw'));
@@ -82,26 +92,21 @@ function seatEl(p, v) {
   const out = p.status === 'finished' || p.status === 'eliminated';
   const av = avatarEl(p.name, { host: p.isHost, offline: !p.connected, mic: p.mic, muted: isMuted(p.id) });
   if (isTurn) av.classList.add('turn');
-  const fan = el('div', { class: 'mini-fan' });
-  const n = Math.min(p.cardCount, 5);
-  for (let i = 0; i < n; i++) {
-    const m = el('div', { class: 'mini' });
-    const rot = (i - (n - 1) / 2) * 12;
-    m.style.left = 15 + (i - (n - 1) / 2) * 5 + 'px';
-    m.style.transform = `rotate(${rot}deg)`;
-    fan.append(m);
-  }
-  if (p.cardCount) fan.append(el('span', { class: 'count-pill', text: p.cardCount }));
+  const cards = p.cardCount || v.phase === 'playing'
+    ? el('span', { class: 'cards-chip' }, [el('i', { class: 'card-glyph' }), String(p.cardCount)])
+    : null;
   let tag = null;
   if (p.status === 'eliminated') tag = '❌';
   else if (p.status === 'finished') tag = '✓';
   return el('div', { class: `seat${isTurn ? ' is-turn' : ''}${out ? ' out' : ''}`, 'data-pid': p.id }, [
     av,
-    el('div', { class: 'seat-name', text: p.name }),
-    el('div', { class: 'seat-meta' }, [
-      p.cardCount || v.phase === 'playing' ? fan : null,
-      el('span', { class: 'score-pill' + (p.score >= 90 ? ' hot' : ''), text: p.score }),
-      tag ? el('span', { class: 'seat-tag', text: tag }) : null,
+    el('div', { class: 'seat-info' }, [
+      el('div', { class: 'seat-name', text: p.name }),
+      el('div', { class: 'seat-meta' }, [
+        cards,
+        el('span', { class: 'score-pill' + (p.score >= 90 ? ' hot' : ''), text: p.score }),
+        tag ? el('span', { class: 'seat-tag', text: tag }) : null,
+      ]),
     ]),
   ]);
 }
@@ -110,8 +115,10 @@ function seatEl(p, v) {
 function watcherEl(s) {
   return el('div', { class: 'seat watcher', 'data-pid': s.id }, [
     avatarEl(s.name, { mic: s.mic, muted: isMuted(s.id) }),
-    el('div', { class: 'seat-name', text: s.name }),
-    el('div', { class: 'seat-tag', text: '👁 ' + t('watching') }),
+    el('div', { class: 'seat-info' }, [
+      el('div', { class: 'seat-name', text: s.name }),
+      el('div', { class: 'seat-tag', text: '👁 ' + t('watching') }),
+    ]),
   ]);
 }
 
@@ -165,7 +172,8 @@ function statusText(v) {
   const meP = v.players.find((p) => p.id === v.me);
   if (v.turn === v.me) {
     let text = t('your_turn');
-    if (v.pending) {
+    if (store.selected) text = t('tap_again');
+    else if (v.pending) {
       text = v.pending.rank === 'K'
         ? t('your_turn_penalty_k', { n: v.pending.count })
         : t('your_turn_penalty', { n: v.pending.count, rank: v.pending.rank });
@@ -235,14 +243,28 @@ function layoutHand() {
   const cards = [...hand.querySelectorAll('.card')];
   const n = cards.length;
   if (n === 0) return;
+  hand.style.removeProperty('--cw-hand');
   const W = hand.clientWidth - 16;
-  const cw = cards[0].offsetWidth || 70;
+  let cw = cards[0].offsetWidth || 70;
+  // A big hand first shrinks (down to 52px) to stay in one readable row; two rows are the last resort.
+  const fitCw = W / (1 + 0.26 * (n - 1));
+  if (fitCw < cw) {
+    cw = Math.max(52, fitCw);
+    hand.style.setProperty('--cw-hand', `${cw}px`);
+  }
   const stepFor = (k) => (k <= 1 ? cw : Math.min(cw * 0.66, (W - cw) / (k - 1)));
-  const twoRows = stepFor(n) < cw * 0.3;
+  const twoRows = stepFor(n) < cw * 0.24;
   const perRow = twoRows ? Math.ceil(n / 2) : n;
   const ov = Math.min(0, stepFor(perRow) - cw);
   hand.classList.toggle('two-rows', twoRows);
-  cards.forEach((c, i) => { c.style.marginLeft = i % perRow === 0 ? '0px' : `${ov}px`; });
+  // A single row is held as a gentle fan: edge cards tilt out and sit a little lower.
+  const fan = !twoRows && n > 1;
+  cards.forEach((c, i) => {
+    const d = fan ? (2 * i) / (n - 1) - 1 : 0; // -1 … 1 across the row
+    c.style.marginLeft = i % perRow === 0 ? '0px' : `${ov}px`;
+    c.style.setProperty('--rot', `${(d * Math.min(6, n * 1.2)).toFixed(2)}deg`);
+    c.style.setProperty('--arc', `${(d * d * 8).toFixed(1)}px`);
+  });
   if (twoRows) cards[perRow - 1].after(el('div', { class: 'row-break', style: { flexBasis: '100%', height: '0' } }));
 }
 
@@ -266,8 +288,11 @@ function snapshot() {
 
 export function renderTable(v, prev) {
   const snap = snapshot();
+  const seats = seatOrder(v);
+  // Up to three opponents fit as wide capsules; more switch to compact stacked tokens.
+  $('#opponents').classList.toggle('many', seats.length > 3);
   $('#opponents').replaceChildren(
-    ...seatOrder(v).map((p) => seatEl(p, v)),
+    ...seats.map((p) => seatEl(p, v)),
     ...v.spectators.filter((s) => s.id !== v.myId && s.connected).map((s) => watcherEl(s)),
   );
   renderPiles(v);

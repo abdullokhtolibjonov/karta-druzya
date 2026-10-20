@@ -59,7 +59,7 @@ function playerRow(p, v, { spectator = false } = {}) {
   }
   if (v.isHost && p.id !== v.myId) {
     row.append(el('button', {
-      class: 'icon-btn kick', html: icons.x, 'aria-label': 'kick',
+      class: 'icon-btn kick', html: icons.x, title: t('kick_name', { name: p.name }), 'aria-label': t('kick_name', { name: p.name }),
       onclick: async () => {
         const res = await call('room:kick', { playerId: p.id });
         if (!res.ok) toast(tErr(res.error), { error: true });

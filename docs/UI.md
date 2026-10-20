@@ -20,13 +20,20 @@ Goal: a warm, polished card table. It should feel like a real deck on green felt
 | `--surface` | #1a2321 | #ffffff |
 | `--text` | #eef3ef | #1b2420 |
 | `--muted` | #93a39c | #5d6b65 |
-| `--felt` | radial #1f6b4a → #0e3b29 | radial #3f9a6e → #24704d |
+| `--felt` | radial #1f6b4a → #0c3826 | radial #3f9a6e → #1f6a48 |
+| `--glass` | rgba(4,22,15,.5) | rgba(6,40,26,.42) |
 | `--accent` | #f4b740 (gold) | #d18b00 |
 | `--danger` | #ef5b5b | #d23c3c |
 | `--card-red` | #d0202f | #d0202f |
 | `--card-black` | #1b1b1f | #1b1b1f |
 
 The card faces stay white in both themes, like real cards.
+
+**Look: "modern table".** On the game screen the felt runs edge to edge behind everything (no
+wooden rim). The HUD floats on it as dark glass (`--glass`, a hairline `--glass-line` border and a
+backdrop blur) with `--on-felt` text in both themes: the top bar, opponent seats, status pill, my
+name pill and the action dock. Home and lobby stay on `--bg` with a felt-green glow at the top;
+the lobby's room code sits on a felt "ticket". Panels are flat (border, no drop shadow).
 
 ## Screens
 
@@ -53,6 +60,8 @@ The card faces stay white in both themes, like real cards.
 - Host only: timer setting (Off / 15 / 30 / 60), **Hammaga ko'rinsin** switch (on by default; off
   hides the room from the open rooms list), **Boshlash / Start** (disabled when < 2 players),
   and a kick ✕ on each player.
+- **Boshlash** (host) or the waiting note (others) sits in a sticky footer, so it is always in
+  reach without scrolling. A disabled primary button turns flat grey, not faded gold.
 - Everyone sees "🔒 Yopiq xona" next to the player count when the room is hidden.
 - Rules summary in a collapsible `<details>`.
 
@@ -61,21 +70,26 @@ Layout (portrait phone):
 ```
 ┌───────────────────────────────┐
 │ top bar: code · round · ⚙ ☾ 🌐 │
-│   opponents (row, scrollable)  │  avatar + name + card count + score + timer ring
+│   opponents (glass capsules)   │  avatar + name + card count + score + timer ring
 │                                │
 │     [deck]   [discard pile]    │  active-suit badge, pending-penalty badge (+4)
 │   status line ("Sizning navbat")│
 │                                │
 │  my hand (overlapping fan)     │
-│ [Ko'tarish] [O'tkazish] 🎤 😀 💬 │
+│ ( [Ko'tarish] [O'tkazish] 🎤 😀 💬 ) │  floating glass dock
 └───────────────────────────────┘
 ```
 - Desktop (≥ 900px): opponents sit along an arc on the felt, the hand is larger and the chat
   panel can stay open on the right.
-- **Hand:** cards overlap with negative margin based on count and screen width. Legal
+- **Opponents:** up to three show as wide capsules (avatar, name, a small card glyph + count, score).
+  Four or more switch to compact stacked tokens so everyone stays on one row.
+- **Hand:** cards overlap with negative margin based on count and screen width. A big hand first
+  shrinks its cards (down to 52px) to stay in one row; two rows are the last resort. Legal
   cards (`view.playable`) are lifted slightly with a gold glow. Illegal ones are dimmed when
-  it is my turn. **Tap selects** (lifts more); **tap again plays**. On desktop a
-  single click plays. A Queen opens a suit picker sheet (4 large suit buttons) before sending.
+  it is my turn. **Tap selects** (lifts more, and the status line says "Tashlash uchun yana
+  bosing"); **tap again plays**; tapping anywhere else on the table puts it back. On desktop a
+  single click plays. A single row is held as a gentle fan (edge cards tilt up to 6° and sit a
+  little lower); two rows stay flat. A Queen opens a suit picker sheet (4 large suit buttons) before sending.
 - **Deck:** a stack of backs with a count. Tapping it = draw (or accept the penalty, then the
   label shows "+N ko'tarish").
 - **Discard:** the top 3 cards with a slight random rotation (deterministic from the card id).
