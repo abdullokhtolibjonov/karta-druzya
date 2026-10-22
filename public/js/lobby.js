@@ -2,6 +2,7 @@ import { call } from './net.js';
 import { t, tErr } from './i18n.js';
 import { $, el, icons, toast, avatarEl } from './ui.js';
 import { voiceSupported, isMuted, toggleMute } from './voice.js';
+import { canStartVote, startVote } from './vote.js';
 
 const TIMER_OPTIONS = [0, 15, 30, 60];
 
@@ -64,6 +65,12 @@ function playerRow(p, v, { spectator = false } = {}) {
         const res = await call('room:kick', { playerId: p.id });
         if (!res.ok) toast(tErr(res.error), { error: true });
       },
+    }));
+  } else if (!spectator && canStartVote(v, p.id)) {
+    // R10.4 – the host has the direct ✕ instead
+    row.append(el('button', {
+      class: 'icon-btn kick', html: icons.userX, title: t('vote_kick_name', { name: p.name }), 'aria-label': t('vote_kick_name', { name: p.name }),
+      onclick: () => startVote(p.id),
     }));
   }
   return row;

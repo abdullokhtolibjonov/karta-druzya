@@ -601,3 +601,20 @@ body[data-screen="game"] .topbar .icon-btn { background: rgba(255, 255, 255, .1)
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Vote kick banner (R10.4) */
+.vote-bar {
+  position: fixed; z-index: 75; left: 0; right: 0; margin: 0 auto;
+  top: calc(var(--topbar-h) + env(safe-area-inset-top) + 8px);
+  width: min(520px, calc(100% - 32px));
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-left: 4px solid var(--danger); border-radius: 16px;
+  box-shadow: var(--shadow); animation: toast-in .25s ease both;
+}
+.vote-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.vote-text strong { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vote-meta, .vote-note { font-size: .82rem; font-weight: 700; color: var(--muted); }
+.vote-left { font-variant-numeric: tabular-nums; }
+.vote-actions { display: flex; gap: 8px; }
+.vote-actions .btn { min-height: 40px; padding: 0 14px; }

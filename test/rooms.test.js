@@ -4,12 +4,13 @@ import { io as connect } from 'socket.io-client';
 import { startServer } from '../server/index.js';
 import { rooms, DRAW_STEP_MS } from '../server/rooms.js';
 
+const VOTE_MS = 1500; // short R10.4 vote for tests
 let server;
 let url;
 const clients = [];
 
 before(async () => {
-  server = await startServer(0);
+  server = await startServer(0, { voteMs: VOTE_MS });
   url = `http://localhost:${server.port}`;
 });
 
@@ -29,6 +30,16 @@ function client() {
 
 const call = (s, ev, payload) => new Promise((r) => s.emit(ev, payload, r));
 const tick = (ms = 80) => new Promise((r) => setTimeout(r, ms));
+// A room with `names.length` seated players; the first one is the host.
+async function roomWith(tag, names) {
+  const socks = names.map(() => client());
+  const { code } = await call(socks[0], 'room:create', { name: names[0], clientId: `client-${tag}-0` });
+  for (let i = 1; i < names.length; i++) {
+    assert.ok((await call(socks[i], 'room:join', { code, name: names[i], clientId: `client-${tag}-${i}` })).ok);
+  }
+  await tick();
+  return { code, socks };
+}
 
 test('create, join, start, play, chat, reconnect', async () => {
   const a = client();
@@ -213,4 +224,76 @@ test('voice: mic state, signal relay, ice servers', async () => {
   await tick();
   const vid2 = a.last.players.find((p) => p.id === meB.id).vid;
   assert.ok(vid2 && vid2 !== meB.vid);
+});
+
+test('R10.4 vote kick: not with 2 players; 3 players need 2 yes; kicked player can come back', async () => {
+  const two = await roomWith('vk2', ['Ali', 'Vali']);
+  const [a2, b2] = two.socks;
+  assert.equal((await call(b2, 'vote:start', { playerId: a2.last.myId })).error, 'vote_few_players');
+
+  const { code, socks: [a, b, c] } = await roomWith('vk3', ['Ali', 'Vali', 'Sardor']);
+  assert.ok((await call(a, 'game:start')).ok);
+  await tick();
+  const cid = c.last.myId;
+  assert.equal((await call(c, 'vote:start', { playerId: cid })).error, 'not_found');
+  assert.ok((await call(b, 'vote:start', { playerId: cid })).ok);
+  await tick();
+  assert.deepEqual({ ...a.last.vote, endsAt: 0 }, { by: b.last.myId, target: cid, yes: [b.last.myId], no: [], need: 2, endsAt: 0 });
+  assert.ok(a.last.vote.endsAt > Date.now());
+  assert.equal((await call(a, 'vote:start', { playerId: b.last.myId })).error, 'vote_running');
+  assert.equal((await call(c, 'vote:cast', { yes: false })).error, 'vote_target');
+  assert.equal((await call(b, 'vote:cast', { yes: true })).error, 'already_voted');
+
+  const kicked = new Promise((r) => c.once('kicked', r));
+  const ended = new Promise((r) => a.once('vote:end', r));
+  assert.ok((await call(a, 'vote:cast', { yes: true })).ok);
+  assert.deepEqual(await kicked, { vote: true });
+  assert.deepEqual(await ended, { name: 'Sardor', kicked: true });
+  await tick();
+  assert.equal(a.last.vote, null);
+  assert.equal(a.last.players.length, 2);
+  assert.equal(a.last.phase, 'playing'); // two players left: the game goes on (R10.2)
+
+  // R10.1: coming back during the game makes them a spectator for the next round.
+  const c2 = client();
+  assert.ok((await call(c2, 'room:join', { code, name: 'Sardor', clientId: 'client-vk3-2' })).ok);
+  await tick();
+  assert.equal(c2.last.me, null);
+  assert.equal(c2.last.spectators[0].joinNext, true);
+
+  assert.ok((await call(a, 'game:end')).ok);
+  assert.ok((await call(a, 'game:new')).ok);
+});
+
+test('R10.4 vote kick: 4 players need 3 yes; fails early, on time out, and starter cools down', async () => {
+  const { socks: [a, b, c, d] } = await roomWith('vk4', ['Ali', 'Vali', 'Sardor', 'Malika']);
+  const did = d.last.myId;
+  assert.ok((await call(a, 'vote:start', { playerId: did })).ok);
+  await tick();
+  assert.equal(b.last.vote.need, 3);
+  const ended = new Promise((r) => b.once('vote:end', r));
+  assert.ok((await call(b, 'vote:cast', { yes: true })).ok);
+  assert.ok((await call(c, 'vote:cast', { yes: false })).ok); // 2 yes, nobody left to vote
+  assert.deepEqual(await ended, { name: 'Malika', kicked: false });
+  await tick();
+  assert.equal(b.last.vote, null);
+  assert.equal(b.last.players.length, 4);
+  assert.equal((await call(a, 'vote:start', { playerId: did })).error, 'vote_cooldown');
+
+  // Nobody votes: the vote runs out.
+  assert.ok((await call(b, 'vote:start', { playerId: did })).ok);
+  const timedOut = new Promise((r) => c.once('vote:end', r));
+  assert.deepEqual(await timedOut, { name: 'Malika', kicked: false });
+  await tick();
+  assert.equal(c.last.vote, null);
+  assert.equal((await call(c, 'vote:cast', { yes: true })).error, 'no_vote');
+
+  // 3 yes out of 4 kicks in the lobby too.
+  assert.ok((await call(c, 'vote:start', { playerId: did })).ok);
+  assert.ok((await call(a, 'vote:cast', { yes: true })).ok);
+  const kicked = new Promise((r) => d.once('kicked', r));
+  assert.ok((await call(b, 'vote:cast', { yes: true })).ok);
+  assert.deepEqual(await kicked, { vote: true });
+  await tick();
+  assert.equal(a.last.players.length, 3);
 });

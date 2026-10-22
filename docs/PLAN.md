@@ -39,6 +39,12 @@ Work phase by phase. At the end of each phase run `npm test` and tick the boxes.
 - [x] Owner adds Cloudflare TURN keys in Render (docs/DEPLOY.md), verified live 2026-10-19
 - [ ] Real test on phones over mobile data
 
+## Phase 8 — Vote kick (R10.4)
+- [x] RULES.md R10.4, rooms tests (thresholds, fail early, timeout, cooldown, rejoin)
+- [x] Server: `vote:start` / `vote:cast`, `view.vote`, `vote:end`, shared `expel()`
+- [x] Client: vote banner, lobby button, seat menu in the game, i18n
+- [ ] Try it with friends on phones
+
 ## Backlog / ideas
 - Sound effects (play, draw, your turn) with a mute toggle
 - Persist rooms across restarts (currently in memory)

@@ -60,6 +60,8 @@ the lobby's room code sits on a felt "ticket". Panels are flat (border, no drop 
 - Host only: timer setting (Off / 15 / 30 / 60), **Hammaga ko'rinsin** switch (on by default; off
   hides the room from the open rooms list), **Boshlash / Start** (disabled when < 2 players),
   and a kick ✕ on each player.
+- Non-hosts see a vote-kick button (person with ✕) on other players' rows when a vote kick is
+  possible (R10.4: at least 3 counted players, no vote running).
 - **Boshlash** (host) or the waiting note (others) sits in a sticky footer, so it is always in
   reach without scrolling. A disabled primary button turns flat grey, not faded gold.
 - Everyone sees "🔒 Yopiq xona" next to the player count when the room is hidden.
@@ -140,7 +142,11 @@ Layout (portrait phone):
   dot when I muted them. The red dot wins.
 - Speaking: a green outline ring (`.avatar.speaking`) on every avatar of the person talking,
   including me.
-- In the game, tapping an opponent's seat mutes or unmutes them (with a toast). Spectators
+- In the game, tapping an opponent's seat opens a small menu with that name: mute / unmute
+  (with a toast) and **Chiqarish uchun ovozga qo'yish** (R10.4) when allowed.
+- Vote banner (`#vote-bar`, lobby and game): fixed under the top bar with a red left edge,
+  "{by}: {name} chiqarilsinmi?", "Ha: yes/need · N s" and **Yo'q / Ha** buttons for those
+  who can still vote. The target sees a note instead of buttons. The result is a toast. Spectators
   sit at the end of the opponents row as small "👁 tomoshabin" seats, so their bubbles and
   rings show too.
 - If the browser blocks audio, a toast asks: "🔊 Ovozni eshitish uchun ekranga bir marta bosing".

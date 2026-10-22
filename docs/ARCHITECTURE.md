@@ -111,6 +111,7 @@ animates events whose `seq` it has not seen yet.
   myId,                                   // my public id (also set for spectators; `me` is null then)
   isHost, code, settings: { turnSeconds },
   turnEndsAt: epochMs | null, nextRoundAt: epochMs | null, serverNow,
+  vote: null | { by, target, yes: [pid], no: [pid], need, endsAt },  // R10.4
   spectators: [{ id, name, connected, joinNext, vid, mic }]
 }
 ```
@@ -138,6 +139,12 @@ whether their mic is on. See "Voice chat" below.
 - Draw chain (R4.5): while `game.keepDrawing` is true, a second timer calls
   `engine.drawStep` every `DRAW_STEP_MS` (600 ms) and syncs. The turn timer is paused
   (`turnEndsAt: null`) and restarts in full when the chain ends.
+- Vote kick (R10.4): `room.vote` holds one running vote. "Counted players" are the
+  non-eliminated seated players; `need = floor(count / 2) + 1`. `checkVote` runs at the start
+  of every `sync` and settles the vote as soon as the result is certain (kick, impossible,
+  or target gone). A vote timer (`VOTE_MS`, 30 s; `startServer(port, { voteMs })` for tests)
+  ends it as failed. A failed vote blocks its starter for `VOTE_COOLDOWN_MS` (30 s). Kicking
+  uses the same `expel()` as the host ✕.
 - Between rounds: phase `roundOver` shows results. The host clicks "next round", or it
   starts automatically after 8 s.
 
@@ -154,6 +161,8 @@ Client → server (all with an ack callback `(res) => …`, `res = { ok, error?,
 | `rooms:subscribe` | – → `{ ok, rooms: RoomListItem[] }`, then live `rooms` events | anyone (home screen) |
 | `rooms:unsubscribe` | – | anyone |
 | `room:kick` | `{ playerId }` | host |
+| `vote:start` | `{ playerId }` (R10.4 vote kick against that player) | counted player |
+| `vote:cast` | `{ yes: boolean }` | counted player, not the target, once |
 | `game:start` | – | host (≥ 2 players) |
 | `game:next` | – | host, in roundOver |
 | `game:end` | – | host (R7.7) |
@@ -177,6 +186,8 @@ Server → client:
 | `chat:history` | last 50 chat messages (sent on join) |
 | `rooms` | `RoomListItem[]` to subscribers, throttled (250 ms) after any room change |
 | `voice:signal` | `{ from: pid, vid: sender's vid, data }`, only to the target's voice socket |
+| `kicked` | `{ vote?: true }` to the removed member (host ✕ or vote kick) |
+| `vote:end` | `{ name, kicked }` to the room when a vote is decided (not when it is dropped) |
 
 `RoomListItem = { code, host, players, max, phase, round }`. Only rooms with
 `settings.public === true` and at least one connected member are listed. They are sorted

@@ -145,3 +145,16 @@ The starter card affects the **starting player** as if the previous player had p
   deck and leaves the round. If this leaves one active player, the round ends without
   scoring (no loser).
 - R10.3 A disconnected player keeps their seat. The turn timer plays for them.
+- R10.4 **Vote kick.** Any player may start a vote to remove another player, in the lobby or
+  during the game. Spectators cannot start or join a vote.
+  - Counted players: all seated players except eliminated ones (R7.5), the target included.
+    With fewer than 3 counted players there is no vote kick.
+  - The starter votes "yes" automatically. Every other counted player except the target may
+    vote "yes" or "no" once.
+  - The target is removed when "yes" votes reach **more than half** of the counted players:
+    3 players → 2, 4 → 3, 5 → 3, 6 → 4. Removal works like leaving (R10.2) and the game goes on.
+  - The vote fails after **30 seconds**, or earlier once enough "yes" votes are no longer possible.
+    After a failed vote its starter must wait 30 seconds before starting another one.
+  - Only one vote runs in a room at a time. If the target leaves, the vote is dropped.
+  - The removed player may come back with the room link. During a game they join as a
+    spectator and are dealt in at the next round with score 0 (R10.1).

@@ -7,6 +7,7 @@ import { store } from './state.js';
 import { renderLobby, initLobby } from './lobby.js';
 import { renderTable, initTable, renderOverlays } from './table.js';
 import { initChat, resetChat } from './chat.js';
+import { initVote, renderVote } from './vote.js';
 import { initVoice, syncVoice, stopVoice, toggleMic, micOn, onVoiceChange, voiceSupported } from './voice.js';
 
 // ---------- static setup ----------
@@ -136,6 +137,7 @@ function renderMic() {
 function render() {
   renderMic();
   const v = store.view;
+  renderVote(v);
   if (!v) {
     show('home');
     topbarInfo();
@@ -270,7 +272,7 @@ socket.on('state', (v) => {
   syncVoice(v);
 });
 
-socket.on('kicked', () => leaveRoomLocal(t('kicked')));
+socket.on('kicked', (p) => leaveRoomLocal(t(p?.vote ? 'kicked_vote' : 'kicked')));
 
 let everConnected = false;
 socket.on('connect', async () => {
@@ -294,6 +296,7 @@ socket.on('disconnect', () => {
 initLobby();
 initTable();
 initChat();
+initVote();
 initVoice();
 onVoiceChange(() => render());
 for (const id of ['#btn-mic', '#btn-mic-lobby']) $(id).addEventListener('click', toggleMic);

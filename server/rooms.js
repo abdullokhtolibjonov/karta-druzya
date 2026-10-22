@@ -10,6 +10,8 @@ const TURN_OPTIONS = [0, 15, 30, 60];
 const NEXT_ROUND_MS = 8000;
 export const DRAW_STEP_MS = 600; // R4.5 pause between cards of a draw chain
 const LOBBY_GRACE_MS = 30_000;
+const VOTE_MS = 30_000; // R10.4
+const VOTE_COOLDOWN_MS = 30_000;
 const EMPTY_ROOM_MS = 10 * 60_000;
 const CHAT_GAP_MS = 700;
 const REACT_GAP_MS = 300;
@@ -35,7 +37,7 @@ function cleanName(name) {
 
 const validClientId = (id) => typeof id === 'string' && id.length >= 8 && id.length <= 64;
 
-export function createRoomManager(io, { now = () => Date.now(), ice = createIceProvider() } = {}) {
+export function createRoomManager(io, { now = () => Date.now(), ice = createIceProvider(), voteMs = VOTE_MS } = {}) {
   // ---------- room state ----------
 
   function createRoom() {
@@ -48,6 +50,7 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
       timer: null,
       timerKey: null,
       drawTimer: null,
+      vote: null,
       turnEndsAt: null,
       nextRoundTimer: null,
       nextRoundAt: null,
@@ -91,6 +94,7 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
     broadcastList();
     clearTimeout(room.timer);
     clearTimeout(room.drawTimer);
+    clearTimeout(room.vote?.timer);
     clearTimeout(room.nextRoundTimer);
     clearTimeout(room.emptyTimer);
     for (const m of room.members.values()) clearTimeout(m.graceTimer);
@@ -188,6 +192,66 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
     return res;
   }
 
+  // ---------- vote kick (R10.4) ----------
+
+  // Counted players: seated and not eliminated. The target is one of them.
+  const votePids = (room) => room.game.players.filter((p) => p.status !== 'eliminated').map((p) => p.id);
+  const votesNeeded = (count) => Math.floor(count / 2) + 1;
+
+  function expel(room, target, payload) {
+    for (const sid of target.sockets) {
+      const s = io.sockets.sockets.get(sid);
+      if (s) {
+        s.leave(room.code);
+        s.data.code = null;
+        s.emit('kicked', payload);
+      }
+    }
+    target.sockets.clear();
+    setVoiceSocket(target, null);
+    removeMember(room, target);
+  }
+
+  function endVote(room, kicked) {
+    const vote = room.vote;
+    clearTimeout(vote.timer);
+    room.vote = null;
+    if (kicked) {
+      const target = memberByPid(room, vote.target);
+      if (target) expel(room, target, { vote: true });
+    } else {
+      const starter = memberByPid(room, vote.by);
+      if (starter) starter.voteBlockedUntil = now() + VOTE_COOLDOWN_MS;
+    }
+    io.to(room.code).emit('vote:end', { name: vote.targetName, kicked });
+  }
+
+  // Settles the running vote once the result is certain. Called before every sync.
+  function checkVote(room) {
+    const vote = room.vote;
+    if (!vote) return;
+    const pids = votePids(room);
+    if (!pids.includes(vote.target) || pids.length < 3) {
+      clearTimeout(vote.timer); // target left: drop the vote silently
+      room.vote = null;
+      return;
+    }
+    const need = votesNeeded(pids.length);
+    const yes = pids.filter((pid) => vote.yes.has(pid)).length;
+    const open = pids.filter((pid) => pid !== vote.target && !vote.yes.has(pid) && !vote.no.has(pid)).length;
+    if (yes >= need) endVote(room, true);
+    else if (yes + open < need) endVote(room, false);
+  }
+
+  function voteView(room) {
+    const vote = room.vote;
+    if (!vote) return null;
+    return {
+      by: vote.by, target: vote.target, yes: [...vote.yes], no: [...vote.no],
+      need: votesNeeded(votePids(room).length), endsAt: vote.endsAt,
+    };
+  }
+
   // ---------- broadcasting ----------
 
   function viewFor(room, member) {
@@ -207,12 +271,15 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
     v.settings = room.settings;
     v.turnEndsAt = room.turnEndsAt;
     v.nextRoundAt = room.nextRoundAt;
+    v.vote = voteView(room);
     v.serverNow = now();
     return v;
   }
 
   function sync(room) {
     broadcastList();
+    if (!rooms.has(room.code)) return;
+    checkVote(room);
     if (!rooms.has(room.code)) return;
     armTimers(room);
     for (const m of room.members.values()) {
@@ -374,17 +441,39 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
     on('room:kick', { host: true }, ({ room, member }, p) => {
       const target = memberByPid(room, p.playerId);
       if (!target || target === member) return { ok: false, error: 'not_found' };
-      for (const sid of target.sockets) {
-        const s = io.sockets.sockets.get(sid);
-        if (s) {
-          s.leave(room.code);
-          s.data.code = null;
-          s.emit('kicked');
-        }
-      }
-      target.sockets.clear();
-      setVoiceSocket(target, null);
-      removeMember(room, target);
+      expel(room, target, {});
+      return { ok: true };
+    });
+
+    // R10.4
+    on('vote:start', {}, ({ room, member }, p) => {
+      if (room.vote) return { ok: false, error: 'vote_running' };
+      const pids = votePids(room);
+      if (!pids.includes(member.pid)) return { ok: false, error: 'vote_not_player' };
+      if (pids.length < 3) return { ok: false, error: 'vote_few_players' };
+      if (p.playerId === member.pid || !pids.includes(p.playerId)) return { ok: false, error: 'not_found' };
+      if ((member.voteBlockedUntil ?? 0) > now()) return { ok: false, error: 'vote_cooldown' };
+      const vote = {
+        by: member.pid, target: p.playerId, targetName: memberByPid(room, p.playerId)?.name ?? '',
+        yes: new Set([member.pid]), no: new Set(), endsAt: now() + voteMs, timer: null,
+      };
+      vote.timer = setTimeout(() => {
+        if (room.vote !== vote || !rooms.has(room.code)) return;
+        endVote(room, false);
+        sync(room);
+      }, voteMs);
+      room.vote = vote;
+      return { ok: true };
+    });
+
+    on('vote:cast', {}, ({ room, member }, p) => {
+      const vote = room.vote;
+      if (!vote) return { ok: false, error: 'no_vote' };
+      if (typeof p.yes !== 'boolean') return { ok: false, error: 'bad_request' };
+      if (!votePids(room).includes(member.pid)) return { ok: false, error: 'vote_not_player' };
+      if (member.pid === vote.target) return { ok: false, error: 'vote_target' };
+      if (vote.yes.has(member.pid) || vote.no.has(member.pid)) return { ok: false, error: 'already_voted' };
+      (p.yes ? vote.yes : vote.no).add(member.pid);
       return { ok: true };
     });
 

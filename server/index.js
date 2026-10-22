@@ -8,7 +8,7 @@ import { createIceProvider } from './voice.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-export function startServer(port = process.env.PORT || 3000) {
+export function startServer(port = process.env.PORT || 3000, { voteMs } = {}) {
   const app = express();
   app.get('/health', (_req, res) => res.json({ ok: true }));
   app.use(express.static(join(root, 'public'), { extensions: ['html'] }));
@@ -16,7 +16,7 @@ export function startServer(port = process.env.PORT || 3000) {
   const http = createServer(app);
   const io = new Server(http, { pingInterval: 10_000, pingTimeout: 20_000 });
   const ice = createIceProvider({ keyId: process.env.TURN_KEY_ID, token: process.env.TURN_KEY_API_TOKEN });
-  createRoomManager(io, { ice });
+  createRoomManager(io, { ice, voteMs });
 
   return new Promise((resolve) => {
     http.listen(port, () => resolve({ http, io, port: http.address().port }));

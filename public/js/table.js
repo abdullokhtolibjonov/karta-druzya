@@ -6,6 +6,7 @@ import { $, el, toast, cardEl, avatarEl, openModal, closeModal, modalKey, setMod
 import { store, serverNow, nameOf } from './state.js';
 import { leaveRoomLocal } from './main.js';
 import { voiceSupported, isMuted, toggleMute } from './voice.js';
+import { canStartVote, startVote } from './vote.js';
 
 const finePointer = matchMedia('(hover: hover) and (pointer: fine)');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -68,15 +69,38 @@ export function initTable() {
   $('#deck').addEventListener('click', () => { if (store.view?.canDraw) act('game:draw'); });
   $('#btn-draw').addEventListener('click', () => act('game:draw'));
   $('#btn-pass').addEventListener('click', () => act('game:pass'));
-  // Tapping someone's seat mutes or unmutes them (only for me).
+  // Tapping someone's seat opens their menu: mute (only for me) and vote kick (R10.4).
   $('#opponents').addEventListener('click', (e) => {
     const pid = e.target.closest('.seat')?.dataset.pid;
     const v = store.view;
-    if (!voiceSupported || !pid || !v || pid === v.myId) return;
-    toast(t(toggleMute(pid) ? 'muted_name' : 'unmuted_name', { name: nameOf(v, pid) }));
+    if (!pid || !v || pid === v.myId) return;
+    seatMenu(v, pid);
   });
   addEventListener('resize', () => layoutHand());
   setInterval(tickTimer, 200);
+}
+
+function seatMenu(v, pid) {
+  const name = nameOf(v, pid);
+  const items = [];
+  if (voiceSupported) {
+    items.push(el('button', {
+      class: 'btn btn-secondary btn-lg', type: 'button', text: t(isMuted(pid) ? 'unmute' : 'mute'),
+      onclick: () => {
+        closeModal();
+        toast(t(toggleMute(pid) ? 'muted_name' : 'unmuted_name', { name }));
+      },
+    }));
+  }
+  if (canStartVote(v, pid)) {
+    items.push(el('button', {
+      class: 'btn btn-danger btn-lg', type: 'button', text: t('vote_kick'),
+      onclick: () => { closeModal(); startVote(pid); },
+    }));
+  }
+  if (!items.length) return;
+  items.push(el('button', { class: 'btn btn-secondary btn-lg', type: 'button', text: t('close'), onclick: () => closeModal() }));
+  openModal([el('h2', { text: name }), el('div', { class: 'stack' }, items)]);
 }
 
 // ---------- render ----------
