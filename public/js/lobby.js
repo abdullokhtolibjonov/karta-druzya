@@ -84,9 +84,18 @@ export function renderLobby(v) {
 
   const specs = $('#lobby-spectators');
   if (v.spectators.length) {
+    // R10.1 – a spectator who chose to keep watching can take a free seat.
+    const iWatch = !v.me && v.players.length < 6;
     specs.replaceChildren(
       el('h2', { class: 'panel-title', style: { marginTop: '14px' }, text: t('spectators') }),
       el('ul', { class: 'player-list' }, v.spectators.map((s) => playerRow(s, v, { spectator: true }))),
+      iWatch ? el('button', {
+        class: 'btn btn-secondary', type: 'button', style: { marginTop: '10px', width: '100%' }, text: t('join_game'),
+        onclick: async () => {
+          const res = await call('room:watch', { on: false });
+          if (!res.ok) toast(tErr(res.error), { error: true });
+        },
+      }) : null,
     );
   } else {
     specs.replaceChildren();

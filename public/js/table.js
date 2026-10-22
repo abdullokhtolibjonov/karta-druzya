@@ -242,11 +242,19 @@ function renderHand(v) {
   hand.classList.toggle('my-turn', v.phase === 'playing' && v.turn === v.me);
   if (!meP || meP.status === 'eliminated' || (meP.status !== 'active' && v.myHand.length === 0)) {
     let note = t('spectating');
-    if (!meP) note = v.spectators.find((s) => s.id === v.myId)?.joinNext ? t('spectating_next') : t('spectating');
-    else if (meP.status === 'eliminated') note = t('eliminated_you');
+    let toggle = null;
+    if (!meP) {
+      // R10.1 – a spectator chooses to join next round or keep watching.
+      const joinNext = !!v.spectators.find((s) => s.id === v.myId)?.joinNext;
+      note = t(joinNext ? 'spectating_next' : 'spectating');
+      toggle = el('button', {
+        class: 'btn btn-secondary watch-btn', type: 'button', text: t(joinNext ? 'watch_stay' : 'watch_join'),
+        onclick: () => act('room:watch', { on: joinNext }),
+      });
+    } else if (meP.status === 'eliminated') note = t('eliminated_you');
     else if (meP.status === 'finished') note = t('finished_you');
     else note = '';
-    hand.replaceChildren(el('div', { class: 'hand-note', text: note }));
+    hand.replaceChildren(el('div', { class: 'hand-note' }, [el('div', { text: note }), toggle]));
     hand.classList.remove('two-rows');
     return;
   }

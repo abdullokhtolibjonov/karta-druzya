@@ -132,6 +132,11 @@ whether their mic is on. See "Voice chat" below.
 - Host: the first person who joins. If the host leaves, the next seated player becomes host.
 - Max 6 seated players. Others are spectators. Joining while `phase` is `playing` or
   `roundOver` makes the person a spectator with `joinNext: true` (R10.1).
+- Spectator choice (R10.1): `room:watch { on }` sets `member.watch` (keep watching) and
+  `joinNext = !on`. `addWaitingSpectators` seats only connected members with `joinNext`;
+  `game:new` sets `joinNext = !watch`. In the lobby, `on: false` seats the member at once.
+- A disconnected member is removed after `LOBBY_GRACE_MS` (30 s) in the lobby, and in any
+  phase when they are not seated (spectators, R10.3). Seated players keep their seat.
 - An empty room (no connected sockets) is deleted after 10 minutes.
 - Timer: `rooms.js` owns one `setTimeout` per room. After every successful action it
   re-arms the timer if `turn` or `seq` changed (R8.2). When the timer fires it calls
@@ -161,6 +166,7 @@ Client → server (all with an ack callback `(res) => …`, `res = { ok, error?,
 | `rooms:subscribe` | – → `{ ok, rooms: RoomListItem[] }`, then live `rooms` events | anyone (home screen) |
 | `rooms:unsubscribe` | – | anyone |
 | `room:kick` | `{ playerId }` | host |
+| `room:watch` | `{ on: boolean }` (true = keep watching, false = join next round) | spectator |
 | `vote:start` | `{ playerId }` (R10.4 vote kick against that player) | counted player |
 | `vote:cast` | `{ yes: boolean }` | counted player, not the target, once |
 | `game:start` | – | host (≥ 2 players) |

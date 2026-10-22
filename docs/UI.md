@@ -144,6 +144,9 @@ Layout (portrait phone):
   including me.
 - In the game, tapping an opponent's seat opens a small menu with that name: mute / unmute
   (with a toast) and **Chiqarish uchun ovozga qo'yish** (R10.4) when allowed.
+- A spectator sees, in place of the hand, "Keyingi raunddan qo'shilasiz" or "Siz tomoshabinsiz"
+  and a toggle button **Tomosha qilishda davom etish** / **Keyingi raunddan qo'shilish** (R10.1).
+  In the lobby a spectator who kept watching gets **O'yinga qo'shilish** under the spectators.
 - Vote banner (`#vote-bar`, lobby and game): fixed under the top bar with a red left edge,
   "{by}: {name} chiqarilsinmi?", "Ha: yes/need · N s" and **Yo'q / Ha** buttons for those
   who can still vote. The target sees a note instead of buttons. The result is a toast. Spectators

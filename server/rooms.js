@@ -73,7 +73,8 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
 
   function addWaitingSpectators(room) {
     for (const m of room.members.values()) {
-      if (!m.joinNext || isSeated(room, m.pid)) continue;
+      // R10.1 – only connected spectators who want to play
+      if (!m.joinNext || m.sockets.size === 0 || isSeated(room, m.pid)) continue;
       if (E.aliveCount(room.game) >= E.MAX_PLAYERS) break;
       if (E.addPlayer(room.game, { id: m.pid, name: m.name }).ok) m.joinNext = false;
     }
@@ -329,7 +330,7 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
         E.renamePlayer(room.game, member.pid, name);
       }
     } else {
-      member = { pid: randomUUID().slice(0, 8), clientId, name, sockets: new Set(), joinNext: false, graceTimer: null, lastChat: 0, lastReact: 0, voiceSocket: null, vid: null, mic: false };
+      member = { pid: randomUUID().slice(0, 8), clientId, name, sockets: new Set(), joinNext: false, watch: false, graceTimer: null, lastChat: 0, lastReact: 0, voiceSocket: null, vid: null, mic: false };
       room.members.set(clientId, member);
       const res = E.addPlayer(room.game, { id: member.pid, name });
       // R10.1: during a round (or when full) -> spectator, dealt in next round if possible.
@@ -400,7 +401,8 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
     socket.on('disconnect', () => {
       const { room, member } = detach(socket);
       if (!room || !member) return;
-      if (member.sockets.size === 0 && room.game.phase === 'lobby') {
+      // Lobby members and spectators (R10.3) leave after a grace period; seated players stay.
+      if (member.sockets.size === 0 && (room.game.phase === 'lobby' || !isSeated(room, member.pid))) {
         member.graceTimer = setTimeout(() => {
           if (member.sockets.size === 0 && rooms.has(room.code)) {
             removeMember(room, member);
@@ -477,6 +479,16 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
       return { ok: true };
     });
 
+    // R10.1 – a spectator chooses between "keep watching" (on) and "join next round" (off).
+    on('room:watch', {}, ({ room, member }, p) => {
+      if (typeof p.on !== 'boolean') return { ok: false, error: 'bad_request' };
+      if (isSeated(room, member.pid)) return { ok: false, error: 'not_spectator' };
+      member.watch = p.on;
+      member.joinNext = !p.on;
+      if (room.game.phase === 'lobby') addWaitingSpectators(room);
+      return { ok: true };
+    });
+
     on('game:start', { host: true }, ({ room }) => {
       if (room.game.phase !== 'lobby') return { ok: false, error: 'game_in_progress' };
       addWaitingSpectators(room);
@@ -490,7 +502,7 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
     on('game:new', { host: true }, ({ room }) => {
       if (room.game.phase !== 'gameOver') return { ok: false, error: 'game_in_progress' };
       E.resetGame(room.game);
-      for (const m of room.members.values()) if (!isSeated(room, m.pid)) m.joinNext = true;
+      for (const m of room.members.values()) if (!isSeated(room, m.pid)) m.joinNext = !m.watch; // R10.1
       addWaitingSpectators(room);
       return { ok: true };
     });

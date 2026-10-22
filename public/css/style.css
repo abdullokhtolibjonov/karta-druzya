@@ -436,6 +436,7 @@ body[data-screen="game"] .topbar .icon-btn { background: rgba(255, 255, 255, .1)
   .hand.my-turn .card.playable:not(.selected):hover { --lift: 22px; }
 }
 .hand-note { width: 100%; text-align: center; color: var(--on-felt-muted); font-weight: 800; padding: 24px 0; }
+.hand-note .watch-btn { margin-top: 12px; }
 
 .actions {
   display: flex; align-items: center; gap: 8px;

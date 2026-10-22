@@ -143,6 +143,37 @@ test('R4.5 draw chain: server draws step by step, turn timer paused', async () =
   b.close();
 });
 
+test('R10.1 spectators: disconnected ones are not dealt in; join next round or keep watching', async () => {
+  const { code, socks: [a, b] } = await roomWith('watch', ['Ali', 'Vali']);
+  assert.ok((await call(a, 'game:start')).ok);
+  const s1 = client();
+  const s2 = client();
+  assert.ok((await call(s1, 'room:join', { code, name: 'Sardor', clientId: 'client-watch-s1' })).ok);
+  assert.ok((await call(s2, 'room:join', { code, name: 'Malika', clientId: 'client-watch-s2' })).ok);
+  await tick();
+  assert.deepEqual(a.last.spectators.map((s) => s.joinNext), [true, true]);
+  assert.equal((await call(b, 'room:watch', { on: true })).error, 'not_spectator');
+  assert.equal((await call(s1, 'room:watch', { on: 'yes' })).error, 'bad_request');
+
+  // Sardor leaves the browser; Malika chooses to keep watching.
+  s1.close();
+  assert.ok((await call(s2, 'room:watch', { on: true })).ok);
+  await tick();
+  assert.deepEqual(a.last.spectators.map((s) => [s.name, s.joinNext]), [['Sardor', true], ['Malika', false]]);
+
+  assert.ok((await call(a, 'game:end')).ok);
+  assert.ok((await call(a, 'game:new')).ok);
+  await tick();
+  assert.deepEqual(a.last.players.map((p) => p.name), ['Ali', 'Vali']);
+  assert.equal(s2.last.me, null);
+
+  // Malika changes her mind in the lobby: seated right away.
+  assert.ok((await call(s2, 'room:watch', { on: false })).ok);
+  await tick();
+  assert.deepEqual(a.last.players.map((p) => p.name), ['Ali', 'Vali', 'Malika']);
+  assert.equal(s2.last.me, s2.last.myId);
+});
+
 test('public room list: live updates, hidden rooms, empty rooms', async () => {
   const watcher = client();
   let latest = null;

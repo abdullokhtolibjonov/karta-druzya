@@ -139,12 +139,17 @@ The starter card affects the **starting player** as if the previous player had p
 
 ## 10. People joining and leaving
 
-- R10.1 Someone who joins during a game becomes a spectator. They are dealt in at the
-  **next round** with score 0, as long as there are fewer than 6 players.
+- R10.1 Someone who joins during a game becomes a spectator. By default they are dealt in at
+  the **next round** with score 0, as long as there are fewer than 6 players.
+  - A spectator may switch at any time between **"join next round"** and **"keep watching"**.
+    The choice stays until they change it, also when the host starts a new game. Choosing
+    "join" in the lobby seats them right away if there is room.
+  - Only spectators who are **connected** when a round starts are dealt in.
 - R10.2 A player who leaves or is kicked during a round has their hand shuffled into the
   deck and leaves the round. If this leaves one active player, the round ends without
   scoring (no loser).
 - R10.3 A disconnected player keeps their seat. The turn timer plays for them.
+  A disconnected spectator is removed from the room after 30 seconds.
 - R10.4 **Vote kick.** Any player may start a vote to remove another player, in the lobby or
   during the game. Spectators cannot start or join a vote.
   - Counted players: all seated players except eliminated ones (R7.5), the target included.
