@@ -78,6 +78,8 @@ viewFor(game, playerId) → PublicView   // hides other hands
   mustPlay: false,                            // R4.5 turn came back to the same player
   drawChain: false, keepDrawing: false,       // R4.5 chain started / more steps to come
   autoPass: false,                            // R8.3 pass when the running chain ends
+  finishing: null | playerId,                 // R6.5 1v1 finish waiting for stack/accept
+  lastChance: false,                          // R6.7 the other player's last turn (1v1)
   drawnCard: null | cardId,                   // last card drawn this turn (R4.2)
   lastLoserId, winnerId,
   lastRound: null | { loserId, added, before, after, eliminated, reset, bonuses:[ids] },
@@ -102,6 +104,7 @@ animates events whose `seq` it has not seen yet.
   playable: [cardId],                     // server-computed legal cards for me (UI hints)
   canDraw, canPass,
   drawing,                                // R4.5 draw chain running (no actions allowed)
+  lastChance,                             // R6.7 last turn of the remaining player
   players: [{ id, name, seat, cardCount, score, status, connected, isHost, queenBonus, vid, mic }],
   spectators: [{ id, name }],
   lastRound, winnerId, standings?,        // standings when gameOver

@@ -27,6 +27,8 @@ export function createGame({ rng = Math.random } = {}) {
     autoPass: false,
     hasDrawn: false,
     drawnCard: null,
+    finishing: null,
+    lastChance: false,
     lastLoserId: null,
     winnerId: null,
     lastRound: null,
@@ -123,6 +125,11 @@ function chainStep(game, player) {
   return card;
 }
 
+// R6.7 – the last chance turn before any 8 or Ace: play or pass, no draw.
+const lastChanceOpen = (game) => game.lastChance && !game.mustPlay;
+
+const canPlayAny = (game, player) => player.hand.some((c) => !playError(game, player, c));
+
 const mustPlayDrawn = (game, player) =>
   game.drawChain && game.hasDrawn && !!game.drawnCard && !playError(game, player, game.drawnCard);
 
@@ -185,7 +192,7 @@ export function removePlayer(game, id) {
       game.pending = null;
       setTurn(game, next);
     }
-  } else if (game.phase === 'playing' && activePlayers(game).length <= 1) {
+  } else if (game.phase === 'playing' && activePlayers(game).length <= 1 && !game.lastChance) {
     endRound(game, { aborted: true });
   } else if (game.phase === 'roundOver' && alivePlayers(game).length <= 1) {
     finishGame(game);
@@ -207,6 +214,8 @@ export function startRound(game) {
   game.deck = shuffle(makeDeck(), game.rng);
   game.discard = [];
   game.pending = null;
+  game.finishing = null;
+  game.lastChance = false;
   game.lastRound = null;
   resetTurnFlags(game);
 
@@ -289,17 +298,51 @@ export function play(game, playerId, cardId, suit) {
 }
 
 function finishPlayerAndAdvance(game, p, c) {
-  // R6.1, R6.2
+  if (game.lastChance) return lastChancePlayed(game, p, c);
   if (p.hand.length === 0) {
+    const others = activePlayers(game).filter((q) => q !== p);
+    const opp = others.length === 1 ? others[0] : null; // R6.4
+    if (opp && c.rank === 'A' && cardsLeft(game)) {
+      // R6.6 – the skip brings the turn back to an empty hand
+      emit(game, 'skip', { playerId: opp.id });
+      setTurn(game, p.id);
+      game.mustPlay = true;
+      chainStep(game, p);
+      return ok();
+    }
+    if (opp && game.pending && canPlayAny(game, opp)) {
+      // R6.5 – the finish waits until the other player stacks or accepts
+      game.finishing = p.id;
+      setTurn(game, opp.id);
+      return ok();
+    }
+    // R6.1, R6.2
     p.status = 'finished';
     if (c.rank === 'Q') p.queenBonus = true;
     emit(game, 'finish', { playerId: p.id, queen: p.queenBonus });
   }
-  if (activePlayers(game).length <= 1) {
+  const left = activePlayers(game);
+  if (left.length <= 1) {
+    if (left.length === 1 && !game.pending && c.rank !== 'A' && canPlayAny(game, left[0])) {
+      // R6.7
+      game.lastChance = true;
+      setTurn(game, left[0].id);
+      return ok();
+    }
     endRound(game);
     return ok();
   }
   let next = nextActive(game, p.id);
+  if (next === game.finishing) {
+    // R6.5 – stacked back: the finisher takes the penalty, loses the turn and plays on
+    const f = findPlayer(game, next);
+    const got = drawCards(game, f, game.pending.count);
+    emit(game, 'penalty', { playerId: f.id, count: got.length });
+    game.pending = null;
+    game.finishing = null;
+    setTurn(game, nextActive(game, f.id));
+    return ok();
+  }
   if (c.rank === 'A') {
     // R5.9
     emit(game, 'skip', { playerId: next });
@@ -310,10 +353,25 @@ function finishPlayerAndAdvance(game, p, c) {
   return ok();
 }
 
+// R6.7 – a card played in the last chance. The round ends unless the turn stays here.
+function lastChancePlayed(game, p, c) {
+  game.pending = null; // nobody is left to take a penalty
+  if (c.rank === 'A' && (p.hand.length > 0 || cardsLeft(game))) {
+    setTurn(game, p.id);
+    game.mustPlay = true; // R4.5
+    if (p.hand.length === 0) chainStep(game, p);
+    return ok();
+  }
+  if (p.hand.length === 0 && c.rank === 'Q') p.queenBonus = true; // R6.2
+  endRound(game);
+  return ok();
+}
+
 export function draw(game, playerId) {
   const err = checkTurn(game, playerId);
   if (err) return fail(err);
   if (game.keepDrawing) return fail('drawing');
+  if (lastChanceOpen(game)) return fail('no_draw_last_chance'); // R6.7
   if (!game.pending && game.hasDrawn) return fail('already_drawn');
   begin(game);
   doDraw(game, playerId);
@@ -335,6 +393,14 @@ function doDraw(game, playerId) {
     const got = drawCards(game, p, game.pending.count);
     emit(game, 'penalty', { playerId, count: got.length });
     game.pending = null;
+    if (game.finishing) {
+      // R6.5 – accepted: the finisher finishes and the round ends
+      const f = findPlayer(game, game.finishing);
+      f.status = 'finished';
+      emit(game, 'finish', { playerId: f.id, queen: false });
+      endRound(game);
+      return;
+    }
     setTurn(game, nextActive(game, playerId));
     return;
   }
@@ -354,7 +420,7 @@ export function pass(game, playerId) {
   if (err) return fail(err);
   if (game.pending) return fail('must_stack_or_draw');
   if (game.keepDrawing) return fail('drawing'); // R4.5
-  if (!game.hasDrawn) return fail('draw_first'); // R4.3
+  if (!game.hasDrawn && !lastChanceOpen(game)) return fail('draw_first'); // R4.3, R6.7
   if (mustPlayDrawn(game, findPlayer(game, playerId))) return fail('must_play_drawn'); // R4.5
   begin(game);
   doPass(game, playerId);
@@ -363,6 +429,7 @@ export function pass(game, playerId) {
 
 function doPass(game, playerId) {
   emit(game, 'pass', { playerId });
+  if (game.lastChance) return endRound(game); // R6.7
   setTurn(game, nextActive(game, playerId));
 }
 
@@ -382,7 +449,7 @@ export function timeout(game) {
     game.autoPass = true;
     chainStep(game, p);
   } else {
-    if (!game.hasDrawn) doDraw(game, playerId);
+    if (!game.hasDrawn && !lastChanceOpen(game)) doDraw(game, playerId); // R6.7 – pass only
     doPass(game, playerId);
   }
   return ok();
@@ -422,6 +489,8 @@ function endRound(game, { aborted = false } = {}) {
     game.lastRound = { loserId: null, aborted: true, hand: [], bonuses: [] };
   }
   game.pending = null;
+  game.finishing = null;
+  game.lastChance = false;
 
   for (const p of game.players) {
     p.hand = [];
@@ -473,7 +542,7 @@ export function resetGame(game) {
   begin(game);
   Object.assign(game, {
     phase: 'lobby', round: 0, deck: [], discard: [], activeSuit: null, turn: null,
-    pending: null, lastLoserId: null, winnerId: null, lastRound: null, standings: null,
+    pending: null, finishing: null, lastChance: false, lastLoserId: null, winnerId: null, lastRound: null, standings: null,
   });
   resetTurnFlags(game);
   for (const p of game.players) Object.assign(p, { hand: [], score: 0, status: 'waiting', queenBonus: false });
@@ -506,8 +575,10 @@ export function viewFor(game, playerId) {
     drawnCard: myTurn ? game.drawnCard : null,
     playable: myTurn ? me.hand.filter((c) => !playError(game, me, c)) : [],
     drawing: game.keepDrawing,
-    canDraw: myTurn && !game.keepDrawing && (!!game.pending || !game.hasDrawn),
-    canPass: myTurn && !game.pending && game.hasDrawn && !game.keepDrawing && !mustPlayDrawn(game, me),
+    lastChance: game.lastChance,
+    canDraw: myTurn && !game.keepDrawing && !lastChanceOpen(game) && (!!game.pending || !game.hasDrawn),
+    canPass: myTurn && !game.pending && !game.keepDrawing &&
+      (lastChanceOpen(game) || (game.hasDrawn && !mustPlayDrawn(game, me))),
     players: game.players.map((p) => ({
       id: p.id, name: p.name, cardCount: p.hand.length, score: p.score, status: p.status,
     })),

@@ -353,13 +353,154 @@ test('R6.3 round ends with one player; pending penalty applied to loser first', 
   assert.equal(pl(g, 'b').score, 18);
 });
 
+test('R6.5 1v1 last card 6/7: other player stacks it back, finisher draws and plays on', () => {
+  const g = setup({ hands: { a: ['6H'], b: ['6C', '10D'] }, top: '10H', deck: ['JD', 'KD', 'AD'] });
+  assert.ok(E.play(g, 'a', '6H').ok);
+  assert.equal(pl(g, 'a').status, 'active');
+  assert.equal(g.turn, 'b');
+  assert.deepEqual(g.pending, { rank: '6', count: 1 });
+  assert.ok(E.play(g, 'b', '6C').ok);
+  assert.deepEqual(hand(g, 'a'), ['AD', 'KD']);
+  assert.equal(pl(g, 'a').status, 'active');
+  assert.equal(g.pending, null);
+  assert.equal(g.turn, 'b'); // a lost the turn (R5.3)
+  assert.equal(g.mustPlay, false); // not an R4.5 case
+  E.draw(g, 'b');
+  assert.deepEqual(hand(g, 'b'), ['10D', 'JD']);
+  assert.ok(E.pass(g, 'b').ok);
+  assert.equal(g.turn, 'a');
+});
+
+test('R6.5 1v1 last card 6/7: other player accepts, finisher finishes, round ends', () => {
+  const g = setup({ hands: { a: ['7H'], b: ['7C', '10D'] }, top: '10H', deck: ['JD', 'KD', 'AD'] });
+  E.play(g, 'a', '7H');
+  assert.equal(g.turn, 'b');
+  assert.ok(E.draw(g, 'b').ok);
+  assert.equal(g.phase, 'roundOver');
+  assert.equal(g.lastRound.loserId, 'b');
+  assert.deepEqual(g.lastRound.hand, ['7C', '10D', 'AD', 'KD']);
+  assert.ok(g.events.some((e) => e.type === 'finish' && e.playerId === 'a'));
+  // timeout = accept
+  const g2 = setup({ hands: { a: ['7H'], b: ['7C', '10D'] }, top: '10H', deck: ['JD', 'KD', 'AD'] });
+  E.play(g2, 'a', '7H');
+  E.timeout(g2);
+  assert.equal(g2.lastRound.loserId, 'b');
+  // stacking with their own last card: the finisher takes the penalty and loses
+  const g3 = setup({ hands: { a: ['6H'], b: ['6C'] }, top: '10H', deck: ['JD', 'KD', 'AD'] });
+  E.play(g3, 'a', '6H');
+  E.play(g3, 'b', '6C');
+  assert.equal(g3.phase, 'roundOver');
+  assert.equal(g3.lastRound.loserId, 'a');
+  assert.deepEqual(g3.lastRound.hand, ['AD', 'KD']);
+});
+
+test('R6.5 1v1 last card K♠ or nothing to stack: penalty drawn, round ends at once', () => {
+  const g = setup({ hands: { a: ['KS'], b: ['KC'] }, top: '10S', deck: ['6D', '7D', '10D', 'JD', 'AD'] });
+  E.play(g, 'a', 'KS');
+  assert.equal(g.phase, 'roundOver');
+  assert.equal(g.lastRound.loserId, 'b');
+  assert.equal(g.lastRound.hand.length, 5);
+});
+
+test('R6.6 1v1 ace as last card: not finished, draw chain starts', () => {
+  const g = setup({ hands: { a: ['AH'], b: ['10C'] }, top: '10H', deck: ['JD', 'JH'] });
+  E.play(g, 'a', 'AH');
+  assert.equal(pl(g, 'a').status, 'active');
+  assert.equal(g.turn, 'a');
+  drain(g);
+  assert.deepEqual(hand(g, 'a'), ['JH']);
+  assert.equal(E.pass(g, 'a').error, 'must_play_drawn');
+  assert.ok(E.play(g, 'a', 'JH').ok);
+  assert.equal(g.phase, 'roundOver'); // b gets a last chance but 10C does not fit
+  assert.equal(g.lastRound.loserId, 'b');
+  // 3 players: the ace player finishes normally
+  const g2 = setup({ hands: { a: ['AH'], b: ['10C'], c: ['JC'] }, top: '10H' });
+  E.play(g2, 'a', 'AH');
+  assert.equal(pl(g2, 'a').status, 'finished');
+  assert.equal(g2.turn, 'c');
+});
+
+test('R6.7 last chance: play one fitting card or pass, no draw, then the round ends', () => {
+  const lc = (b, extra = {}) => setup({ hands: { a: ['JC'], b }, top: 'JS', deck: ['JD', '10C'], ...extra });
+  const g = lc(['10C', 'KD']);
+  E.play(g, 'a', 'JC');
+  assert.equal(pl(g, 'a').status, 'finished');
+  assert.equal(g.phase, 'playing');
+  assert.equal(g.turn, 'b');
+  const v = E.viewFor(g, 'b');
+  assert.equal(v.lastChance, true);
+  assert.deepEqual(v.playable, ['10C']);
+  assert.equal(v.canDraw, false);
+  assert.equal(v.canPass, true);
+  assert.equal(E.draw(g, 'b').error, 'no_draw_last_chance');
+  assert.ok(E.play(g, 'b', '10C').ok);
+  assert.equal(g.phase, 'roundOver');
+  assert.equal(g.lastRound.loserId, 'b');
+  assert.equal(g.lastRound.added, 4);
+  // pass
+  const g2 = lc(['10C', 'KD']);
+  E.play(g2, 'a', 'JC');
+  assert.ok(E.pass(g2, 'b').ok);
+  assert.equal(g2.lastRound.added, 14);
+  // timeout = pass
+  const g3 = lc(['10C', 'KD']);
+  E.play(g3, 'a', 'JC');
+  E.timeout(g3);
+  assert.equal(g3.lastRound.added, 14);
+  // nothing fits: the round ends at once
+  const g4 = lc(['KD']);
+  E.play(g4, 'a', 'JC');
+  assert.equal(g4.phase, 'roundOver');
+  assert.equal(g4.lastRound.added, 4);
+  // a penalty card has no effect
+  const g5 = lc(['6C', 'KD']);
+  E.play(g5, 'a', 'JC');
+  E.play(g5, 'b', '6C');
+  assert.equal(g5.phase, 'roundOver');
+  assert.deepEqual(g5.lastRound.hand, ['KD']);
+});
+
+test('R6.7 last chance: 8 is covered (draw chain), ace comes back, empty hand still loses', () => {
+  const lc = (b, extra = {}) => setup({ hands: { a: ['JC'], b }, top: 'JS', deck: ['JD', '10C'], ...extra });
+  const g = lc(['8C', 'KD']);
+  E.play(g, 'a', 'JC');
+  E.play(g, 'b', '8C');
+  assert.equal(g.phase, 'playing');
+  assert.equal(g.turn, 'b');
+  E.draw(g, 'b');
+  drain(g);
+  assert.equal(g.drawnCard, '10C');
+  assert.equal(E.pass(g, 'b').error, 'must_play_drawn');
+  E.play(g, 'b', '10C');
+  assert.equal(g.phase, 'roundOver');
+  assert.deepEqual(g.lastRound.hand, ['KD']);
+  // ace: turn comes back, plays again
+  const g2 = lc(['AC', 'KC', 'JH']);
+  E.play(g2, 'a', 'JC');
+  E.play(g2, 'b', 'AC');
+  assert.equal(g2.turn, 'b');
+  assert.equal(g2.phase, 'playing');
+  E.play(g2, 'b', 'KC');
+  assert.equal(g2.phase, 'roundOver');
+  assert.equal(g2.lastRound.added, 2);
+  // hand emptied with a queen: loser with 0 points and the queen bonus
+  const g3 = lc(['QC'], { scores: { b: 40 } });
+  E.play(g3, 'a', 'JC');
+  E.play(g3, 'b', 'QC', 'H');
+  assert.equal(g3.phase, 'roundOver');
+  assert.equal(g3.lastRound.loserId, 'b');
+  assert.equal(g3.lastRound.added, 0);
+  assert.deepEqual(g3.lastRound.bonuses, ['b']);
+  assert.equal(pl(g3, 'b').score, 10);
+});
+
 test('R7.2/R7.3 only loser scores; queen bonus −30 floored at 0', () => {
-  const g = setup({ hands: { a: ['QH'], b: ['10C', 'AC'], c: ['9C', '10D'] }, top: '10H', scores: { a: 40, b: 0, c: 10 } });
+  const g = setup({ hands: { a: ['QH'], b: ['10C', 'KC'], c: ['9C', '10D'] }, top: '10H', scores: { a: 40, b: 0, c: 10 } });
   E.play(g, 'a', 'QH', 'C');
   assert.equal(pl(g, 'a').status, 'finished');
   E.play(g, 'b', '10C');
   E.play(g, 'c', '9C');
-  E.play(g, 'b', 'AC');
+  E.play(g, 'b', 'KC'); // R6.7: c has nothing that fits
   assert.equal(g.phase, 'roundOver');
   assert.equal(g.lastRound.loserId, 'c');
   assert.equal(pl(g, 'c').score, 20);
@@ -367,12 +508,12 @@ test('R7.2/R7.3 only loser scores; queen bonus −30 floored at 0', () => {
   assert.equal(pl(g, 'b').score, 0);
   assert.deepEqual(g.lastRound.bonuses, ['a']);
   const g2 = setup({ hands: { a: ['QH'], b: ['10C'] }, top: '10H', scores: { a: 12 } });
-  E.play(g2, 'a', 'QH', 'C');
+  E.play(g2, 'a', 'QH', 'D'); // R6.7: 10C does not fit
   assert.equal(pl(g2, 'a').score, 0);
 });
 
 test('R7.4 exactly 108 resets to 0', () => {
-  const g2 = setup({ hands: { a: ['10H'], b: ['10C'] }, top: '10S', scores: { b: 98 } });
+  const g2 = setup({ hands: { a: ['10H'], b: ['JC'] }, top: '10S', scores: { b: 106 } });
   E.play(g2, 'a', '10H');
   assert.equal(pl(g2, 'b').score, 0);
   assert.equal(g2.lastRound.reset, true);
@@ -380,7 +521,7 @@ test('R7.4 exactly 108 resets to 0', () => {
 });
 
 test('R7.5/R7.6 over 108 eliminated; game ends when one left', () => {
-  const g = setup({ hands: { a: ['10H'], b: ['10C'] }, top: '10S', scores: { b: 99 } });
+  const g = setup({ hands: { a: ['10H'], b: ['KC'] }, top: '10S', scores: { b: 105 } });
   E.play(g, 'a', '10H');
   assert.equal(pl(g, 'b').status, 'eliminated');
   assert.equal(g.phase, 'gameOver');
@@ -476,7 +617,7 @@ test('R10.2 leaving mid-round: cards back to deck, turn moves, round aborts if o
 });
 
 test('R10.1 add player between rounds joins next round', () => {
-  const g = setup({ hands: { a: ['10H'], b: ['10C', 'JD'], c: ['JC'] }, top: '10S' });
+  const g = setup({ hands: { a: ['10H'], b: ['10C', 'KD'], c: ['JC'] }, top: '10S' });
   assert.equal(E.addPlayer(g, { id: 'z', name: 'Z' }).error, 'game_in_progress');
   E.play(g, 'a', '10H');
   E.play(g, 'b', '10C');

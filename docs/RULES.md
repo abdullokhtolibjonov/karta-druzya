@@ -90,17 +90,46 @@ and a starter Queen, where it is the Queen's own suit.
 ### Ace (skip)
 
 - R5.9 The next active player loses their turn and play continues after them. With 2 active
-  players, the Ace player plays again under R4.5.
+  players, the Ace player plays again under R4.5 (an Ace as the last card: R6.6).
 
 ## 6. Finishing the round
 
 - R6.1 A player whose hand becomes empty finishes the round and stops taking part in it,
-  except when their last card was an 8 (R5.8). Their last card's effect (penalty, skip) still
-  applies to the next player.
+  except when their last card was an 8 (R5.8) or the 1v1 cases below (R6.5, R6.6). Their last
+  card's effect (penalty, skip) still applies to the next player.
 - R6.2 If a player's **last card is a Queen**, they get a **Queen bonus** (R7.3).
   They still choose a suit for the next player.
 - R6.3 The round ends when **exactly one** player still has cards: the **loser**.
   If a penalty is pending against the loser at that moment, they draw those cards first.
+  With 1v1 the end can be delayed by R6.5–R6.7.
+
+### Last two players (1v1)
+
+- R6.4 R6.5–R6.7 apply when a player plays their last card while exactly **one other** player
+  is still active. Call them the **finisher** and the **other player**.
+- R6.5 **Last card is a 6 or 7, and the other player holds a card of the same rank:** the
+  finish is not final yet. The other player gets the turn with the pending penalty.
+  - If they **stack** (R5.2), the penalty comes straight back to the finisher. The finisher
+    does **not** finish: they draw the whole penalty, lose the turn (R5.3) and play goes on.
+  - If they **accept** (R5.3), the finisher finishes and the round ends. The other player
+    is the loser and keeps the penalty cards.
+  - If the other player has no card of that rank, or the last card is K♠, they draw the
+    penalty and the round ends at once (R6.3).
+- R6.6 **Last card is an Ace:** the skip brings the turn back to the finisher (R5.9), so like
+  an 8 (R5.8) they do **not** finish. The draw chain (R4.5) starts automatically. If no cards
+  are left to draw at all, they finish.
+- R6.7 **Last chance.** With any other last card (including a 9 or a Queen) the finisher
+  finishes, and the other player gets **one last turn** before the round ends.
+  - If nothing in their hand fits, the round ends at once.
+  - They may play a fitting card or **pass**. They may **not** draw. A timeout is a pass.
+  - After their card the round ends, except:
+    - an **8** must be covered (R5.4); if nothing fits, the draw chain runs (R4.5) and they
+      must play the first fitting card;
+    - an **Ace** brings the turn back to them (R4.5);
+    - while the turn stays with them this way, the round goes on.
+  - A 6, 7 or K♠ played here has no penalty effect: nobody is left to take it.
+  - Cards drawn here count toward their points. They are still the loser, even if their hand
+    becomes empty (then 0 points are added). A Queen as their last card gives the Queen bonus.
 
 ## 7. Scoring
 
@@ -126,6 +155,7 @@ and a starter Queen, where it is the Queen's own suit.
   - already drawn → pass
   - R4.5 with nothing in hand that fits and not yet drawn → the draw chain runs, then the
     turn passes (the drawn card stays in hand). With a fitting card in hand → draw 1, pass.
+  - last chance (R6.7), before any 8 or Ace → pass, the round ends
 
 ## 9. Starter card effects (R1.4)
 
