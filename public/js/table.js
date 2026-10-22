@@ -173,15 +173,17 @@ function statusText(v) {
   if (v.turn === v.me) {
     let text = t('your_turn');
     if (store.selected) text = t('tap_again');
+    else if (v.drawing) text = t('your_turn_drawing');
     else if (v.pending) {
       text = v.pending.rank === 'K'
         ? t('your_turn_penalty_k', { n: v.pending.count })
         : t('your_turn_penalty', { n: v.pending.count, rank: v.pending.rank });
-    } else if (v.hasDrawn) text = t('your_turn_drawn');
+    } else if (v.hasDrawn) text = t(v.canPass ? 'your_turn_drawn' : 'your_turn_play_drawn');
     else if (v.mustCover) text = t('your_turn_cover');
     return { text, mine: true };
   }
   if (meP?.status === 'finished') return { text: t('finished_you') + ' · ' + t('their_turn', { name: nameOf(v, v.turn) }), mine: false };
+  if (v.drawing) return { text: t('their_drawing', { name: nameOf(v, v.turn) }), mine: false };
   return { text: t('their_turn', { name: nameOf(v, v.turn) }), mine: false };
 }
 

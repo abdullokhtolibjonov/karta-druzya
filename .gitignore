@@ -2,3 +2,10 @@ node_modules/
 .env
 *.log
 .DS_Store
+
+# Local AI-tool folders and browser test screenshots
+.agents/
+.claude/
+.junie/
+.playwright-mcp/
+skills-lock.json

@@ -2,6 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { io as connect } from 'socket.io-client';
 import { startServer } from '../server/index.js';
+import { rooms, DRAW_STEP_MS } from '../server/rooms.js';
 
 let server;
 let url;
@@ -91,6 +92,44 @@ test('create, join, start, play, chat, reconnect', async () => {
   await tick();
   assert.equal(c.last.players.length, 3);
   assert.equal(c.last.phase, 'lobby');
+});
+
+test('R4.5 draw chain: server draws step by step, turn timer paused', async () => {
+  const a = client();
+  const b = client();
+  const { code } = await call(a, 'room:create', { name: 'Ali', clientId: 'client-chain-a' });
+  assert.ok((await call(b, 'room:join', { code, name: 'Vali', clientId: 'client-chain-b' })).ok);
+  assert.ok((await call(a, 'game:start')).ok);
+  await tick();
+  // Hand-craft the state: the turn player covers their own 8 and nothing in hand fits.
+  const g = rooms.get(code).game;
+  const [p, q] = g.turn === g.players[0].id ? g.players : [g.players[1], g.players[0]];
+  p.hand = ['KC', 'JS'];
+  q.hand = ['10C', '6S'];
+  g.discard = ['8H'];
+  g.deck = ['10H', 'JC', 'JD']; // pop() order: JD, JC, 10H
+  Object.assign(g, { activeSuit: 'H', pending: null, mustCover: true, mustPlay: true, hasDrawn: false, drawnCard: null });
+  const s = a.last.myId === p.id ? a : b;
+
+  assert.ok((await call(s, 'game:draw')).ok);
+  await tick();
+  assert.equal(s.last.drawing, true);
+  assert.equal(s.last.turnEndsAt, null);
+  assert.equal(s.last.canDraw, false);
+  assert.equal((await call(s, 'game:pass')).error, 'drawing');
+
+  await tick(DRAW_STEP_MS * 2 + 300);
+  assert.equal(s.last.drawing, false);
+  assert.deepEqual(s.last.myHand, ['KC', 'JS', 'JD', 'JC', '10H']);
+  assert.deepEqual(s.last.playable, ['10H']);
+  assert.equal(s.last.canPass, false);
+  assert.ok(s.last.turnEndsAt > Date.now());
+  assert.ok((await call(s, 'game:play', { cardId: '10H' })).ok);
+  // Back to the lobby so the room is cleaned up after the lobby grace period.
+  assert.ok((await call(a, 'game:end')).ok);
+  assert.ok((await call(a, 'game:new')).ok);
+  a.close();
+  b.close();
 });
 
 test('public room list: live updates, hidden rooms, empty rooms', async () => {

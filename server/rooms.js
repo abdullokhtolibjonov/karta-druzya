@@ -8,6 +8,7 @@ export const EMOJIS = ['😂', '😎', '😡', '😭', '🔥', '👏', '🤔', '
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const TURN_OPTIONS = [0, 15, 30, 60];
 const NEXT_ROUND_MS = 8000;
+export const DRAW_STEP_MS = 600; // R4.5 pause between cards of a draw chain
 const LOBBY_GRACE_MS = 30_000;
 const EMPTY_ROOM_MS = 10 * 60_000;
 const CHAT_GAP_MS = 700;
@@ -16,7 +17,7 @@ const LIST_ROOM = 'room-list'; // socket.io room of clients watching the public 
 const LIST_THROTTLE_MS = 250;
 const SIGNAL_MAX_BYTES = 20_000; // one SDP offer/answer or ICE candidate
 
-const rooms = new Map();
+export const rooms = new Map(); // exported for tests
 
 function makeCode() {
   let code;
@@ -46,6 +47,7 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
       settings: { turnSeconds: 30, public: true },
       timer: null,
       timerKey: null,
+      drawTimer: null,
       turnEndsAt: null,
       nextRoundTimer: null,
       nextRoundAt: null,
@@ -88,6 +90,7 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
   function destroyRoom(room) {
     broadcastList();
     clearTimeout(room.timer);
+    clearTimeout(room.drawTimer);
     clearTimeout(room.nextRoundTimer);
     clearTimeout(room.emptyTimer);
     for (const m of room.members.values()) clearTimeout(m.graceTimer);
@@ -129,8 +132,19 @@ export function createRoomManager(io, { now = () => Date.now(), ice = createIceP
 
   function armTimers(room) {
     const g = room.game;
+    // R4.5 draw chain: one card per step. The turn timer is paused meanwhile.
+    const chain = g.phase === 'playing' && g.keepDrawing;
+    if (chain && !room.drawTimer) {
+      room.drawTimer = setTimeout(() => {
+        room.drawTimer = null;
+        if (E.drawStep(room.game).ok) sync(room);
+      }, DRAW_STEP_MS);
+    } else if (!chain) {
+      clearTimeout(room.drawTimer);
+      room.drawTimer = null;
+    }
     // R8 turn timer, re-armed whenever the game changed (seq) during play.
-    if (g.phase === 'playing' && room.settings.turnSeconds > 0) {
+    if (g.phase === 'playing' && room.settings.turnSeconds > 0 && !chain) {
       const key = `${g.turn}:${g.seq}`;
       if (key !== room.timerKey) {
         clearTimeout(room.timer);

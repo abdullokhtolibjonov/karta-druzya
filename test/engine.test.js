@@ -23,6 +23,16 @@ function setup({ hands, top, deck = ['6D', '7D', '10D', 'JD', 'KD', 'AD'], turn,
   return g;
 }
 
+// Run a draw chain (R4.5) to the end, like the server's step timer does.
+function drain(g) {
+  let steps = 0;
+  while (g.keepDrawing) {
+    assert.ok(E.drawStep(g).ok);
+    steps++;
+  }
+  return steps;
+}
+
 const hand = (g, id) => g.players.find((p) => p.id === id).hand;
 const pl = (g, id) => g.players.find((p) => p.id === id);
 
@@ -122,13 +132,13 @@ test('R3.4 not in hand / not your turn', () => {
 });
 
 // ----- R4 -----
-test('R4.1/R4.2 draw allowed with playable card; after draw only the drawn card', () => {
+test('R4.1/R4.2 draw allowed with playable card; after draw any playable card', () => {
   const g = setup({ hands: { a: ['10H', 'KC'], b: ['6C'] }, top: '10S', deck: ['AS'] });
   assert.ok(E.draw(g, 'a').ok);
   assert.equal(g.drawnCard, 'AS');
-  assert.equal(E.play(g, 'a', '10H').error, 'only_drawn_card');
   assert.equal(E.draw(g, 'a').error, 'already_drawn');
-  assert.ok(E.play(g, 'a', 'AS').ok);
+  assert.equal(E.play(g, 'a', 'KC').error, 'card_not_playable');
+  assert.ok(E.play(g, 'a', '10H').ok);
 });
 
 test('R4.2/R4.3 pass only after drawing', () => {
@@ -202,11 +212,67 @@ test('R5.4 eight: same player must cover', () => {
   assert.equal(g.turn, 'b');
 });
 
-test('R5.5 eight: draw 1, pass if it does not fit', () => {
-  const g = setup({ hands: { a: ['8H', 'KC'], b: ['10C'] }, top: '10H', deck: ['JC'] });
+test('R4.5/R5.5 eight, nothing fits: draw chain one card at a time, must play, no pass', () => {
+  const g = setup({ hands: { a: ['8H', 'KC'], b: ['10C'] }, top: '10H', deck: ['10S', 'JH', 'KD', 'JC'] });
   E.play(g, 'a', '8H');
-  E.draw(g, 'a');
-  assert.equal(E.play(g, 'a', 'JC').error, 'card_not_playable');
+  assert.equal(E.pass(g, 'a').error, 'draw_first');
+  assert.ok(E.draw(g, 'a').ok);
+  // one card per step
+  assert.deepEqual(hand(g, 'a'), ['KC', 'JC']);
+  assert.deepEqual(g.events.filter((e) => e.type === 'draw').map((e) => e.count), [1]);
+  assert.equal(g.keepDrawing, true);
+  let v = E.viewFor(g, 'a');
+  assert.equal(v.drawing, true);
+  assert.equal(v.canDraw, false);
+  assert.equal(v.canPass, false);
+  assert.equal(E.draw(g, 'a').error, 'drawing');
+  assert.equal(E.pass(g, 'a').error, 'drawing');
+  assert.equal(drain(g), 2);
+  assert.deepEqual(hand(g, 'a'), ['KC', 'JC', 'KD', 'JH']);
+  assert.equal(g.drawnCard, 'JH');
+  v = E.viewFor(g, 'a');
+  assert.equal(v.drawing, false);
+  assert.equal(v.canPass, false);
+  assert.equal(v.canDraw, false);
+  assert.equal(E.pass(g, 'a').error, 'must_play_drawn');
+  assert.equal(E.draw(g, 'a').error, 'already_drawn');
+  assert.ok(E.play(g, 'a', 'JH').ok);
+  assert.equal(g.turn, 'b');
+});
+
+test('R4.5 a card in hand fits: draw is only 1 card, then play any fitting card or pass', () => {
+  const g = setup({ hands: { a: ['8H', '10H', 'KC'], b: ['10C'] }, top: '10H', deck: ['JH', 'JC'] });
+  E.play(g, 'a', '8H');
+  assert.ok(E.draw(g, 'a').ok);
+  assert.equal(g.keepDrawing, false);
+  assert.deepEqual(hand(g, 'a'), ['10H', 'KC', 'JC']);
+  assert.equal(E.draw(g, 'a').error, 'already_drawn');
+  assert.deepEqual(E.viewFor(g, 'a').playable, ['10H']);
+  assert.ok(E.pass(g, 'a').ok);
+  assert.equal(g.turn, 'b');
+});
+
+test('R4.5 turn back after a penalty (2 players): normal 1-card draw, pass allowed', () => {
+  const g = setup({ hands: { a: ['7H', 'KC'], b: ['10C'] }, top: '10H' });
+  E.play(g, 'a', '7H');
+  assert.ok(E.draw(g, 'b').ok); // accepts +2
+  assert.equal(g.turn, 'a');
+  assert.ok(E.draw(g, 'a').ok);
+  assert.equal(g.keepDrawing, false);
+  assert.deepEqual(hand(g, 'a'), ['KC', 'JD']);
+  assert.ok(E.pass(g, 'a').ok);
+  assert.equal(g.turn, 'b');
+});
+
+test('R4.5 no playable card left anywhere: pass is allowed', () => {
+  const g = setup({ hands: { a: ['KC'], b: ['10C'] }, top: '8H', deck: ['JD', 'JC'] });
+  g.mustCover = true;
+  g.mustPlay = true;
+  assert.ok(E.draw(g, 'a').ok);
+  drain(g);
+  assert.deepEqual(hand(g, 'a'), ['KC', 'JC', 'JD']);
+  assert.equal(g.keepDrawing, false);
+  assert.equal(E.viewFor(g, 'a').canPass, true);
   assert.ok(E.pass(g, 'a').ok);
   assert.equal(g.turn, 'b');
 });
@@ -232,16 +298,22 @@ test('R5.7 cover with a seven gives penalty', () => {
 });
 
 test('R5.8 eight as last card: auto-draw, not finished', () => {
-  const g = setup({ hands: { a: ['8H'], b: ['10C'], c: ['JC'] }, top: '10H', deck: ['JD'] });
+  const g = setup({ hands: { a: ['8H'], b: ['10C'], c: ['JC'] }, top: '10H', deck: ['JH', 'JD'] });
   E.play(g, 'a', '8H');
   assert.equal(pl(g, 'a').status, 'active');
   assert.deepEqual(hand(g, 'a'), ['JD']);
-  assert.equal(g.drawnCard, 'JD');
+  assert.equal(g.keepDrawing, true);
+  drain(g);
+  assert.deepEqual(hand(g, 'a'), ['JD', 'JH']);
+  assert.equal(g.drawnCard, 'JH');
   assert.equal(g.turn, 'a');
-  assert.ok(E.pass(g, 'a').ok);
+  assert.equal(E.pass(g, 'a').error, 'must_play_drawn');
+  assert.ok(E.play(g, 'a', 'JH').ok);
+  assert.equal(pl(g, 'a').status, 'active');
   // drawn card fits: plays and finishes
   const g2 = setup({ hands: { a: ['8H'], b: ['10C'], c: ['JC'] }, top: '10H', deck: ['JH'] });
   E.play(g2, 'a', '8H');
+  assert.equal(g2.keepDrawing, false);
   assert.ok(E.play(g2, 'a', 'JH').ok);
   assert.equal(pl(g2, 'a').status, 'finished');
 });
@@ -250,9 +322,17 @@ test('R5.9 ace skips next; with 2 players ace player goes again', () => {
   const g = setup({ hands: { a: ['AH', 'KC'], b: ['10C'], c: ['JC'] }, top: '10H' });
   E.play(g, 'a', 'AH');
   assert.equal(g.turn, 'c');
-  const g2 = setup({ hands: { a: ['AH', 'KC'], b: ['10C'] }, top: '10H' });
+  const g2 = setup({ hands: { a: ['AH', 'KC'], b: ['10C'] }, top: '10H', deck: ['10H', 'JC', 'KD'] });
   E.play(g2, 'a', 'AH');
   assert.equal(g2.turn, 'a');
+  // R4.5 – turn came back: draw until playable, no pass
+  assert.equal(g2.mustPlay, true);
+  E.draw(g2, 'a');
+  drain(g2);
+  assert.equal(g2.drawnCard, '10H');
+  assert.equal(E.pass(g2, 'a').error, 'must_play_drawn');
+  assert.ok(E.play(g2, 'a', '10H').ok);
+  assert.equal(g2.turn, 'b');
 });
 
 // ----- R6 / R7 -----
@@ -337,6 +417,21 @@ test('R8.3 timeout: penalty accepted / draw+pass / pass', () => {
   E.timeout(g);
   assert.equal(hand(g, 'c').length, 2);
   assert.equal(g.turn, 'a');
+  // R4.5, nothing in hand fits: the draw chain runs, then the turn passes
+  const g2 = setup({ hands: { a: ['8H', 'KC'], b: ['10C'] }, top: '10H', deck: ['JH', 'KD', 'JC'] });
+  E.play(g2, 'a', '8H');
+  E.timeout(g2);
+  assert.equal(g2.turn, 'a');
+  assert.equal(g2.keepDrawing, true);
+  drain(g2);
+  assert.deepEqual(hand(g2, 'a'), ['KC', 'JC', 'KD', 'JH']);
+  assert.equal(g2.turn, 'b');
+  // R4.5, a card in hand fits: draw 1, pass
+  const g3 = setup({ hands: { a: ['8H', '10H'], b: ['10C'] }, top: '10H', deck: ['JH', 'KD', 'JC'] });
+  E.play(g3, 'a', '8H');
+  E.timeout(g3);
+  assert.deepEqual(hand(g3, 'a'), ['10H', 'JC']);
+  assert.equal(g3.turn, 'b');
 });
 
 // ----- R9 -----
@@ -419,7 +514,11 @@ test('fuzz: random games always terminate with consistent card count', () => {
       assert.equal(cards, 36);
       const v = E.viewFor(g, g.turn);
       const r = rng();
-      if (v.playable.length && r < 0.85) {
+      if (g.keepDrawing) {
+        assert.ok(E.drawStep(g).ok);
+      } else if (r < 0.03) {
+        assert.ok(E.timeout(g).ok);
+      } else if (v.playable.length && (r < 0.85 || (!v.canDraw && !v.canPass))) {
         const c = v.playable[Math.floor(rng() * v.playable.length)];
         assert.ok(E.play(g, g.turn, c, 'SCHD'[Math.floor(rng() * 4)]).ok);
       } else if (v.canDraw) {

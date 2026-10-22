@@ -21,6 +21,10 @@ export function createGame({ rng = Math.random } = {}) {
     turn: null,
     pending: null,
     mustCover: false,
+    mustPlay: false,
+    drawChain: false,
+    keepDrawing: false,
+    autoPass: false,
     hasDrawn: false,
     drawnCard: null,
     lastLoserId: null,
@@ -69,6 +73,10 @@ function resetTurnFlags(game) {
   game.hasDrawn = false;
   game.drawnCard = null;
   game.mustCover = false;
+  game.mustPlay = false;
+  game.drawChain = false;
+  game.keepDrawing = false;
+  game.autoPass = false;
 }
 
 function setTurn(game, playerId) {
@@ -97,10 +105,30 @@ function drawCards(game, player, n) {
   return got;
 }
 
+const cardsLeft = (game) => game.deck.length > 0 || game.discard.length > 1;
+
+// R4.5 – nothing in hand fits, so drawing becomes a chain of single draws.
+const startsChain = (game, player) =>
+  game.mustPlay && !game.hasDrawn && player.hand.every((c) => playError(game, player, c));
+
+// R4.5 – one step of the draw chain. The server spaces the steps out in time.
+function chainStep(game, player) {
+  game.drawChain = true;
+  game.hasDrawn = true;
+  const [card] = drawCards(game, player, 1);
+  emit(game, 'draw', { playerId: player.id, count: card ? 1 : 0 });
+  if (card) game.drawnCard = card;
+  game.keepDrawing = !!card && !!playError(game, player, card) && cardsLeft(game);
+  if (!game.keepDrawing && game.autoPass) doPass(game, player.id); // R8.3
+  return card;
+}
+
+const mustPlayDrawn = (game, player) =>
+  game.drawChain && game.hasDrawn && !!game.drawnCard && !playError(game, player, game.drawnCard);
+
 // Returns null when legal, otherwise an error code.
 export function playError(game, player, cardId) {
   if (!player.hand.includes(cardId)) return 'not_in_hand';
-  if (game.hasDrawn && cardId !== game.drawnCard) return 'only_drawn_card'; // R4.2
   const c = parse(cardId);
   if (game.pending) {
     // R5.2
@@ -218,6 +246,7 @@ export function startRound(game) {
     setTurn(game, nextActive(game, startId));
   } else if (rank === '8') {
     game.mustCover = true; // R9.3
+    game.mustPlay = true; // R4.5
   }
   return ok();
 }
@@ -241,16 +270,11 @@ export function play(game, playerId, cardId, suit) {
   // R5.4 – same player keeps the turn and must cover
   if (c.rank === '8') {
     game.mustCover = true;
+    game.mustPlay = true; // R4.5
     if (p.hand.length === 0) {
       // R5.8
-      const got = drawCards(game, p, 1);
-      if (got.length) {
-        game.hasDrawn = true;
-        game.drawnCard = got[0];
-        emit(game, 'draw', { playerId, count: 1 });
-      } else {
-        return finishPlayerAndAdvance(game, p, c, cardId);
-      }
+      if (!cardsLeft(game)) return finishPlayerAndAdvance(game, p, c, cardId);
+      chainStep(game, p);
     }
     return ok();
   }
@@ -282,15 +306,25 @@ function finishPlayerAndAdvance(game, p, c) {
     next = nextActive(game, next);
   }
   setTurn(game, next);
+  if (next === p.id) game.mustPlay = true; // R4.5
   return ok();
 }
 
 export function draw(game, playerId) {
   const err = checkTurn(game, playerId);
   if (err) return fail(err);
+  if (game.keepDrawing) return fail('drawing');
   if (!game.pending && game.hasDrawn) return fail('already_drawn');
   begin(game);
   doDraw(game, playerId);
+  return ok();
+}
+
+// R4.5 – next step of a running draw chain; called by the server's step timer.
+export function drawStep(game) {
+  if (game.phase !== 'playing' || !game.keepDrawing) return fail('not_drawing');
+  begin(game);
+  chainStep(game, findPlayer(game, game.turn));
   return ok();
 }
 
@@ -304,6 +338,10 @@ function doDraw(game, playerId) {
     setTurn(game, nextActive(game, playerId));
     return;
   }
+  if (startsChain(game, p)) {
+    chainStep(game, p); // R4.5
+    return;
+  }
   // R4.1
   const got = drawCards(game, p, 1);
   game.hasDrawn = true;
@@ -315,7 +353,9 @@ export function pass(game, playerId) {
   const err = checkTurn(game, playerId);
   if (err) return fail(err);
   if (game.pending) return fail('must_stack_or_draw');
+  if (game.keepDrawing) return fail('drawing'); // R4.5
   if (!game.hasDrawn) return fail('draw_first'); // R4.3
+  if (mustPlayDrawn(game, findPlayer(game, playerId))) return fail('must_play_drawn'); // R4.5
   begin(game);
   doPass(game, playerId);
   return ok();
@@ -332,8 +372,15 @@ export function timeout(game) {
   const playerId = game.turn;
   begin(game);
   emit(game, 'timeout', { playerId });
+  const p = findPlayer(game, playerId);
   if (game.pending) {
     doDraw(game, playerId);
+  } else if (game.keepDrawing) {
+    game.autoPass = true; // the running chain passes when it ends
+  } else if (startsChain(game, p)) {
+    // R4.5 – run the chain, then pass
+    game.autoPass = true;
+    chainStep(game, p);
   } else {
     if (!game.hasDrawn) doDraw(game, playerId);
     doPass(game, playerId);
@@ -458,8 +505,9 @@ export function viewFor(game, playerId) {
     myHand: me ? [...me.hand] : [],
     drawnCard: myTurn ? game.drawnCard : null,
     playable: myTurn ? me.hand.filter((c) => !playError(game, me, c)) : [],
-    canDraw: myTurn && (!!game.pending || !game.hasDrawn),
-    canPass: myTurn && !game.pending && game.hasDrawn,
+    drawing: game.keepDrawing,
+    canDraw: myTurn && !game.keepDrawing && (!!game.pending || !game.hasDrawn),
+    canPass: myTurn && !game.pending && game.hasDrawn && !game.keepDrawing && !mustPlayDrawn(game, me),
     players: game.players.map((p) => ({
       id: p.id, name: p.name, cardCount: p.hand.length, score: p.score, status: p.status,
     })),

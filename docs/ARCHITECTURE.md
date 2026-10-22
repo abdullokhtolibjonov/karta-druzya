@@ -54,7 +54,8 @@ addPlayer(game, { id, name })          // seat; status 'waiting' until a round s
 removePlayer(game, id)                 // R10.2
 startRound(game)                       // deals, starter card, R2.2, R9
 play(game, playerId, cardId, suit?)    // suit required for Q
-draw(game, playerId)                   // normal draw, or accept a pending penalty
+draw(game, playerId)                   // normal draw, accept a pending penalty, or start an R4.5 draw chain
+drawStep(game)                         // R4.5 next card of a running draw chain (server step timer)
 pass(game, playerId)
 timeout(game)                          // R8.3 for the current player
 viewFor(game, playerId) → PublicView   // hides other hands
@@ -74,7 +75,10 @@ viewFor(game, playerId) → PublicView   // hides other hands
   turn: playerId | null,
   pending: null | { rank: '6'|'7'|'K', count },
   mustCover: false,                           // R5.4
-  drawnCard: null | cardId,                   // set after a draw this turn (R4.2)
+  mustPlay: false,                            // R4.5 turn came back to the same player
+  drawChain: false, keepDrawing: false,       // R4.5 chain started / more steps to come
+  autoPass: false,                            // R8.3 pass when the running chain ends
+  drawnCard: null | cardId,                   // last card drawn this turn (R4.2)
   lastLoserId, winnerId,
   lastRound: null | { loserId, added, before, after, eliminated, reset, bonuses:[ids] },
   seq: 0,                                     // incremented on every change
@@ -97,6 +101,7 @@ animates events whose `seq` it has not seen yet.
   myHand: [cardId], drawnCard,            // only for `me`
   playable: [cardId],                     // server-computed legal cards for me (UI hints)
   canDraw, canPass,
+  drawing,                                // R4.5 draw chain running (no actions allowed)
   players: [{ id, name, seat, cardCount, score, status, connected, isHost, queenBonus, vid, mic }],
   spectators: [{ id, name }],
   lastRound, winnerId, standings?,        // standings when gameOver
@@ -130,6 +135,9 @@ whether their mic is on. See "Voice chat" below.
 - Timer: `rooms.js` owns one `setTimeout` per room. After every successful action it
   re-arms the timer if `turn` or `seq` changed (R8.2). When the timer fires it calls
   `engine.timeout`.
+- Draw chain (R4.5): while `game.keepDrawing` is true, a second timer calls
+  `engine.drawStep` every `DRAW_STEP_MS` (600 ms) and syncs. The turn timer is paused
+  (`turnEndsAt: null`) and restarts in full when the chain ends.
 - Between rounds: phase `roundOver` shows results. The host clicks "next round", or it
   starts automatically after 8 s.
 

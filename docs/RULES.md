@@ -6,7 +6,7 @@ When a rule changes, update this file first, then the tests, then the engine.
 
 ## 1. Deck and players
 
-- R1.1 Deck: 36 cards. Ranks `6 7 8 9 10 J Q K A`, suits `S` ♠ (qarg'a), `C` ♣ (chillak),
+- R1.1 Deck: 36 cards. Ranks `6 7 8 9 10 J Q K A`, suits `S` ♠ (qarg'a), `C` ♣ (chillik),
   `H` ♥ (yurak), `D` ♦ (g'isht). Card id = rank + suit, e.g. `10H`, `QS`, `KS`.
 - R1.2 2–6 players take part in a round. Extra people are spectators.
 - R1.3 Each player gets **6 cards**. With 6 players: **5 cards** each, so the deck still has cards left.
@@ -36,11 +36,21 @@ and a starter Queen, where it is the Queen's own suit.
 
 - R4.1 Once per turn the player may draw 1 card instead of playing. This is allowed even
   when they have a playable card.
-- R4.2 After drawing, the player may play **only the drawn card** (if it is playable) or **pass**.
-  Passing ends the turn.
+- R4.2 After drawing, the player may play **any playable card** from their hand (the drawn one
+  or another) or **pass**. Passing ends the turn.
 - R4.3 A player may not pass without drawing first. The only exception is the timeout (R8).
 - R4.4 If the deck is empty, the discard pile except its top card is shuffled into a new deck.
   If no cards are available at all, "draw" gives nothing and the player may pass.
+- R4.5 **Turn comes back to the same player** — they must cover their own 8 (R5.4, R9.3)
+  or their Ace skipped everyone else (R5.9).
+  - If a card in their hand fits, they may still draw, but **only 1 card** (R4.1, R4.2).
+  - If nothing in their hand fits, "draw" starts a **draw chain**: cards are drawn
+    **one at a time** with a short pause between them (server side, ~0.6 s) until a
+    playable card comes out. They **must play that card**; passing is not allowed.
+    While the chain runs the turn timer is paused and the player cannot act.
+  - Only when the deck and discard run out without a playable card may they pass.
+  - A turn that comes back only because the other player took a penalty (R5.3, e.g. 2
+    players and a 7) is **not** an R4.5 case: the normal 1-card draw applies (R4.1).
 
 ## 5. Special cards
 
@@ -70,18 +80,17 @@ and a starter Queen, where it is the Queen's own suit.
 
 - R5.4 After playing an 8, the **same player** keeps the turn and must cover it with a card
   playable under R3 (same suit, another 8, a 9 or a Queen). The turn timer restarts.
-- R5.5 If they cannot or will not cover, they draw 1 (R4.1). They play it if it fits;
-  otherwise they pass and the turn moves on.
+- R5.5 If they cannot or will not cover, they draw under R4.5.
 - R5.6 If the drawn card is another 8 and they play it, they must cover again (R5.4).
 - R5.7 A special card used as a cover has its normal effect, e.g. an 8 covered with a 7
   gives the next player a penalty of 2.
-- R5.8 **8 as the last card:** the player does not finish. They automatically draw 1 card
-  and continue under R5.5.
+- R5.8 **8 as the last card:** the player does not finish. The draw chain (R4.5) starts
+  automatically.
 
 ### Ace (skip)
 
 - R5.9 The next active player loses their turn and play continues after them. With 2 active
-  players, the Ace player plays again.
+  players, the Ace player plays again under R4.5.
 
 ## 6. Finishing the round
 
@@ -113,8 +122,10 @@ and a starter Queen, where it is the Queen's own suit.
   (an 8 played, a card drawn).
 - R8.3 On timeout:
   - pending penalty → accept it (R5.3)
-  - not yet drawn → draw 1 card, then pass
+  - not yet drawn → draw 1 card, then pass (except the R4.5 case below)
   - already drawn → pass
+  - R4.5 with nothing in hand that fits and not yet drawn → the draw chain runs, then the
+    turn passes (the drawn card stays in hand). With a fitting card in hand → draw 1, pass.
 
 ## 9. Starter card effects (R1.4)
 
