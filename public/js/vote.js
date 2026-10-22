@@ -30,6 +30,7 @@ export function renderVote(v) {
   const bar = $('#vote-bar');
   const vote = v?.vote;
   bar.classList.toggle('hidden', !vote);
+  document.body.classList.toggle('voting', !!vote);
   if (!vote) {
     bar.replaceChildren();
     return;
@@ -39,7 +40,8 @@ export function renderVote(v) {
   let note = null;
   if (vote.target === v.myId) note = t('vote_you_target');
   else if (voted) note = t('vote_voted');
-  bar.replaceChildren(
+  // replaceChildren turns a null child into the text "null", so drop the empty parts.
+  bar.replaceChildren(...[
     el('div', { class: 'vote-text' }, [
       el('strong', { text: t('vote_title', { by: nameOf(v, vote.by), name: nameOf(v, vote.target) }) }),
       el('span', { class: 'vote-meta' }, [
@@ -53,7 +55,9 @@ export function renderVote(v) {
       el('button', { class: 'btn btn-secondary', type: 'button', text: t('no'), onclick: () => cast(false) }),
       el('button', { class: 'btn btn-danger', type: 'button', text: t('yes'), onclick: () => cast(true) }),
     ]) : null,
-  );
+  ].filter(Boolean));
+  // The screens move down by the banner's height so it never covers the seats.
+  document.body.style.setProperty('--vote-h', `${bar.offsetHeight + 8}px`);
   tickVote();
 }
 

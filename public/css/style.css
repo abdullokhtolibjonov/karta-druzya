@@ -619,3 +619,6 @@ body[data-screen="game"] .topbar .icon-btn { background: rgba(255, 255, 255, .1)
 .vote-left { font-variant-numeric: tabular-nums; }
 .vote-actions { display: flex; gap: 8px; }
 .vote-actions .btn { min-height: 40px; padding: 0 14px; }
+.game, #screen-lobby { transition: padding-top .25s ease; }
+body.voting .game { padding-top: calc(6px + var(--vote-h, 0px)); }
+body.voting #screen-lobby { padding-top: calc(16px + var(--vote-h, 0px)); }
