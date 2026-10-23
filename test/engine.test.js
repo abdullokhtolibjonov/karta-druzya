@@ -353,45 +353,20 @@ test('R6.3 round ends with one player; pending penalty applied to loser first', 
   assert.equal(pl(g, 'b').score, 18);
 });
 
-test('R6.5 1v1 last card 6/7: other player stacks it back, finisher draws and plays on', () => {
-  const g = setup({ hands: { a: ['6H'], b: ['6C', '10D'] }, top: '10H', deck: ['JD', 'KD', 'AD'] });
-  assert.ok(E.play(g, 'a', '6H').ok);
-  assert.equal(pl(g, 'a').status, 'active');
-  assert.equal(g.turn, 'b');
-  assert.deepEqual(g.pending, { rank: '6', count: 1 });
-  assert.ok(E.play(g, 'b', '6C').ok);
-  assert.deepEqual(hand(g, 'a'), ['AD', 'KD']);
-  assert.equal(pl(g, 'a').status, 'active');
-  assert.equal(g.pending, null);
-  assert.equal(g.turn, 'b'); // a lost the turn (R5.3)
-  assert.equal(g.mustPlay, false); // not an R4.5 case
-  E.draw(g, 'b');
-  assert.deepEqual(hand(g, 'b'), ['10D', 'JD']);
-  assert.ok(E.pass(g, 'b').ok);
-  assert.equal(g.turn, 'a');
-});
-
-test('R6.5 1v1 last card 6/7: other player accepts, finisher finishes, round ends', () => {
+test('R6.5 1v1 last card 6/7: finisher finishes at once, no stacking back', () => {
   const g = setup({ hands: { a: ['7H'], b: ['7C', '10D'] }, top: '10H', deck: ['JD', 'KD', 'AD'] });
-  E.play(g, 'a', '7H');
-  assert.equal(g.turn, 'b');
-  assert.ok(E.draw(g, 'b').ok);
+  assert.ok(E.play(g, 'a', '7H').ok);
   assert.equal(g.phase, 'roundOver');
   assert.equal(g.lastRound.loserId, 'b');
   assert.deepEqual(g.lastRound.hand, ['7C', '10D', 'AD', 'KD']);
   assert.ok(g.events.some((e) => e.type === 'finish' && e.playerId === 'a'));
-  // timeout = accept
-  const g2 = setup({ hands: { a: ['7H'], b: ['7C', '10D'] }, top: '10H', deck: ['JD', 'KD', 'AD'] });
-  E.play(g2, 'a', '7H');
-  E.timeout(g2);
+  assert.equal(E.play(g, 'b', '7C').error, 'not_playing');
+  // a 6 stacked as the last card, other player holds a 6 too
+  const g2 = setup({ hands: { a: ['6H'], b: ['6C'] }, top: '10H', deck: ['JD', 'KD', 'AD'], turn: 'a', pending: { rank: '6', count: 1 } });
+  E.play(g2, 'a', '6H');
+  assert.equal(g2.phase, 'roundOver');
   assert.equal(g2.lastRound.loserId, 'b');
-  // stacking with their own last card: the finisher takes the penalty and loses
-  const g3 = setup({ hands: { a: ['6H'], b: ['6C'] }, top: '10H', deck: ['JD', 'KD', 'AD'] });
-  E.play(g3, 'a', '6H');
-  E.play(g3, 'b', '6C');
-  assert.equal(g3.phase, 'roundOver');
-  assert.equal(g3.lastRound.loserId, 'a');
-  assert.deepEqual(g3.lastRound.hand, ['AD', 'KD']);
+  assert.deepEqual(g2.lastRound.hand, ['6C', 'AD', 'KD']);
 });
 
 test('R6.5 1v1 last card K♠ or nothing to stack: penalty drawn, round ends at once', () => {

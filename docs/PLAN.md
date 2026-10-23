@@ -46,8 +46,8 @@ Work phase by phase. At the end of each phase run `npm test` and tick the boxes.
 - [ ] Try it with friends on phones
 
 ## Phase 9 — 1v1 ending (R6.4–R6.7)
-- [x] RULES.md: last 6/7 can be stacked back, Ace as last card does not finish, last chance
-- [x] Engine tests and engine (`finishing`, `lastChance`, `no_draw_last_chance`)
+- [x] RULES.md: last 6/7 finishes at once (no stacking back), Ace as last card does not finish, last chance
+- [x] Engine tests and engine (`lastChance`, `no_draw_last_chance`)
 - [x] Client status texts, i18n
 - [ ] Try it with friends on phones
 

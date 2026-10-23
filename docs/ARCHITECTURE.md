@@ -78,7 +78,6 @@ viewFor(game, playerId) → PublicView   // hides other hands
   mustPlay: false,                            // R4.5 turn came back to the same player
   drawChain: false, keepDrawing: false,       // R4.5 chain started / more steps to come
   autoPass: false,                            // R8.3 pass when the running chain ends
-  finishing: null | playerId,                 // R6.5 1v1 finish waiting for stack/accept
   lastChance: false,                          // R6.7 the other player's last turn (1v1)
   drawnCard: null | cardId,                   // last card drawn this turn (R4.2)
   lastLoserId, winnerId,

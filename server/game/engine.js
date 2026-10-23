@@ -27,7 +27,6 @@ export function createGame({ rng = Math.random } = {}) {
     autoPass: false,
     hasDrawn: false,
     drawnCard: null,
-    finishing: null,
     lastChance: false,
     lastLoserId: null,
     winnerId: null,
@@ -214,7 +213,6 @@ export function startRound(game) {
   game.deck = shuffle(makeDeck(), game.rng);
   game.discard = [];
   game.pending = null;
-  game.finishing = null;
   game.lastChance = false;
   game.lastRound = null;
   resetTurnFlags(game);
@@ -310,13 +308,7 @@ function finishPlayerAndAdvance(game, p, c) {
       chainStep(game, p);
       return ok();
     }
-    if (opp && game.pending && canPlayAny(game, opp)) {
-      // R6.5 – the finish waits until the other player stacks or accepts
-      game.finishing = p.id;
-      setTurn(game, opp.id);
-      return ok();
-    }
-    // R6.1, R6.2
+    // R6.1, R6.2, R6.5
     p.status = 'finished';
     if (c.rank === 'Q') p.queenBonus = true;
     emit(game, 'finish', { playerId: p.id, queen: p.queenBonus });
@@ -333,16 +325,6 @@ function finishPlayerAndAdvance(game, p, c) {
     return ok();
   }
   let next = nextActive(game, p.id);
-  if (next === game.finishing) {
-    // R6.5 – stacked back: the finisher takes the penalty, loses the turn and plays on
-    const f = findPlayer(game, next);
-    const got = drawCards(game, f, game.pending.count);
-    emit(game, 'penalty', { playerId: f.id, count: got.length });
-    game.pending = null;
-    game.finishing = null;
-    setTurn(game, nextActive(game, f.id));
-    return ok();
-  }
   if (c.rank === 'A') {
     // R5.9
     emit(game, 'skip', { playerId: next });
@@ -393,14 +375,6 @@ function doDraw(game, playerId) {
     const got = drawCards(game, p, game.pending.count);
     emit(game, 'penalty', { playerId, count: got.length });
     game.pending = null;
-    if (game.finishing) {
-      // R6.5 – accepted: the finisher finishes and the round ends
-      const f = findPlayer(game, game.finishing);
-      f.status = 'finished';
-      emit(game, 'finish', { playerId: f.id, queen: false });
-      endRound(game);
-      return;
-    }
     setTurn(game, nextActive(game, playerId));
     return;
   }
@@ -489,7 +463,6 @@ function endRound(game, { aborted = false } = {}) {
     game.lastRound = { loserId: null, aborted: true, hand: [], bonuses: [] };
   }
   game.pending = null;
-  game.finishing = null;
   game.lastChance = false;
 
   for (const p of game.players) {
@@ -542,7 +515,7 @@ export function resetGame(game) {
   begin(game);
   Object.assign(game, {
     phase: 'lobby', round: 0, deck: [], discard: [], activeSuit: null, turn: null,
-    pending: null, finishing: null, lastChance: false, lastLoserId: null, winnerId: null, lastRound: null, standings: null,
+    pending: null, lastChance: false, lastLoserId: null, winnerId: null, lastRound: null, standings: null,
   });
   resetTurnFlags(game);
   for (const p of game.players) Object.assign(p, { hand: [], score: 0, status: 'waiting', queenBonus: false });

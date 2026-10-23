@@ -95,26 +95,20 @@ and a starter Queen, where it is the Queen's own suit.
 ## 6. Finishing the round
 
 - R6.1 A player whose hand becomes empty finishes the round and stops taking part in it,
-  except when their last card was an 8 (R5.8) or the 1v1 cases below (R6.5, R6.6). Their last
+  except when their last card was an 8 (R5.8) or an Ace in 1v1 (R6.6). Their last
   card's effect (penalty, skip) still applies to the next player.
 - R6.2 If a player's **last card is a Queen**, they get a **Queen bonus** (R7.3).
   They still choose a suit for the next player.
 - R6.3 The round ends when **exactly one** player still has cards: the **loser**.
   If a penalty is pending against the loser at that moment, they draw those cards first.
-  With 1v1 the end can be delayed by R6.5–R6.7.
+  With 1v1 the end can be delayed by R6.6–R6.7.
 
 ### Last two players (1v1)
 
 - R6.4 R6.5–R6.7 apply when a player plays their last card while exactly **one other** player
   is still active. Call them the **finisher** and the **other player**.
-- R6.5 **Last card is a 6 or 7, and the other player holds a card of the same rank:** the
-  finish is not final yet. The other player gets the turn with the pending penalty.
-  - If they **stack** (R5.2), the penalty comes straight back to the finisher. The finisher
-    does **not** finish: they draw the whole penalty, lose the turn (R5.3) and play goes on.
-  - If they **accept** (R5.3), the finisher finishes and the round ends. The other player
-    is the loser and keeps the penalty cards.
-  - If the other player has no card of that rank, or the last card is K♠, they draw the
-    penalty and the round ends at once (R6.3).
+- R6.5 **Last card is a 6, 7 or K♠:** the finisher finishes at once. The other player
+  cannot stack it back: they draw the penalty and the round ends (R6.3).
 - R6.6 **Last card is an Ace:** the skip brings the turn back to the finisher (R5.9), so like
   an 8 (R5.8) they do **not** finish. The draw chain (R4.5) starts automatically. If no cards
   are left to draw at all, they finish.
