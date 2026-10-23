@@ -458,15 +458,21 @@ test('R6.7 last chance: 8 is covered (draw chain), ace comes back, empty hand st
   E.play(g2, 'b', 'KC');
   assert.equal(g2.phase, 'roundOver');
   assert.equal(g2.lastRound.added, 2);
-  // hand emptied with a queen: loser with 0 points and the queen bonus
-  const g3 = lc(['QC'], { scores: { b: 40 } });
+  // hand emptied with the queen of hearts: loser with 0 points and the queen bonus
+  const g3 = lc(['QH'], { scores: { b: 40 } });
   E.play(g3, 'a', 'JC');
-  E.play(g3, 'b', 'QC', 'H');
+  E.play(g3, 'b', 'QH', 'C');
   assert.equal(g3.phase, 'roundOver');
   assert.equal(g3.lastRound.loserId, 'b');
   assert.equal(g3.lastRound.added, 0);
   assert.deepEqual(g3.lastRound.bonuses, ['b']);
   assert.equal(pl(g3, 'b').score, 10);
+  // another queen: no bonus
+  const g4 = lc(['QC'], { scores: { b: 40 } });
+  E.play(g4, 'a', 'JC');
+  E.play(g4, 'b', 'QC', 'H');
+  assert.deepEqual(g4.lastRound.bonuses, []);
+  assert.equal(pl(g4, 'b').score, 40);
 });
 
 test('R7.2/R7.3 only loser scores; queen bonus −30 floored at 0', () => {
@@ -485,6 +491,14 @@ test('R7.2/R7.3 only loser scores; queen bonus −30 floored at 0', () => {
   const g2 = setup({ hands: { a: ['QH'], b: ['10C'] }, top: '10H', scores: { a: 12 } });
   E.play(g2, 'a', 'QH', 'D'); // R6.7: 10C does not fit
   assert.equal(pl(g2, 'a').score, 0);
+  // R6.2 – only the queen of hearts gives the bonus
+  for (const q of ['QS', 'QC', 'QD']) {
+    const g3 = setup({ hands: { a: [q], b: ['10C'] }, top: '10H', scores: { a: 40 } });
+    E.play(g3, 'a', q, 'D');
+    assert.equal(pl(g3, 'a').queenBonus, false);
+    assert.deepEqual(g3.lastRound.bonuses, []);
+    assert.equal(pl(g3, 'a').score, 40);
+  }
 });
 
 test('R7.4 exactly 108 resets to 0', () => {

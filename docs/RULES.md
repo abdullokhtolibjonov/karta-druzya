@@ -97,8 +97,8 @@ and a starter Queen, where it is the Queen's own suit.
 - R6.1 A player whose hand becomes empty finishes the round and stops taking part in it,
   except when their last card was an 8 (R5.8) or an Ace in 1v1 (R6.6). Their last
   card's effect (penalty, skip) still applies to the next player.
-- R6.2 If a player's **last card is a Queen**, they get a **Queen bonus** (R7.3).
-  They still choose a suit for the next player.
+- R6.2 If a player's **last card is the Queen of Hearts** (`QH`), they get a **Queen bonus**
+  (R7.3). They still choose a suit for the next player. Other Queens give no bonus.
 - R6.3 The round ends when **exactly one** player still has cards: the **loser**.
   If a penalty is pending against the loser at that moment, they draw those cards first.
   With 1v1 the end can be delayed by R6.6–R6.7.
@@ -123,7 +123,7 @@ and a starter Queen, where it is the Queen's own suit.
     - while the turn stays with them this way, the round goes on.
   - A 6, 7 or K♠ played here has no penalty effect: nobody is left to take it.
   - Cards drawn here count toward their points. They are still the loser, even if their hand
-    becomes empty (then 0 points are added). A Queen as their last card gives the Queen bonus.
+    becomes empty (then 0 points are added). The Queen of Hearts as their last card gives the Queen bonus (R6.2).
 
 ## 7. Scoring
 

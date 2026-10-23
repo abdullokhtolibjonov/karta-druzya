@@ -44,6 +44,9 @@ const activePlayers = (game) => game.players.filter((p) => p.status === 'active'
 const alivePlayers = (game) => game.players.filter((p) => p.status !== 'eliminated');
 const topCard = (game) => game.discard.at(-1) ?? null;
 
+// R6.2 – only the Queen of Hearts as the last card
+const isQueenBonus = (c) => c.rank === 'Q' && c.suit === 'H';
+
 function penaltyRank(cardId) {
   if (cardId === 'KS') return 'K';
   const { rank } = parse(cardId);
@@ -310,7 +313,7 @@ function finishPlayerAndAdvance(game, p, c) {
     }
     // R6.1, R6.2, R6.5
     p.status = 'finished';
-    if (c.rank === 'Q') p.queenBonus = true;
+    if (isQueenBonus(c)) p.queenBonus = true;
     emit(game, 'finish', { playerId: p.id, queen: p.queenBonus });
   }
   const left = activePlayers(game);
@@ -344,7 +347,7 @@ function lastChancePlayed(game, p, c) {
     if (p.hand.length === 0) chainStep(game, p);
     return ok();
   }
-  if (p.hand.length === 0 && c.rank === 'Q') p.queenBonus = true; // R6.2
+  if (p.hand.length === 0 && isQueenBonus(c)) p.queenBonus = true; // R6.2
   endRound(game);
   return ok();
 }
